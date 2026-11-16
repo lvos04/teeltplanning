@@ -25,6 +25,7 @@ from .db.modellen import (
     Instelling,
     Kap,
     Lampgroep,
+    Modelversie,
     ParameterLbe,
     Ras,
     Ronde,
@@ -88,6 +89,7 @@ _RELEVANT = (
     BelichtingWeek,
     ParameterLbe,
     Ras,
+    Modelversie,
 )
 
 
@@ -236,6 +238,15 @@ def gewas_invoer(db: Session, snap: instellingen.Snapshot) -> kern_gewas.GewasIn
     )  # fmt: skip
 
 
+def voorspeller(db: Session, snap: instellingen.Snapshot):
+    """De voorstelladder uit de actieve modelversie (fase 4); None zolang er niet getraind is."""
+    from .voorstel import dienst, historie
+
+    temperaturen = historie.Temperaturen(historie.dagtemperaturen(db, verwachting=True)) if snap[
+        "voorstel.temperatuurcorrectie"] else None  # fmt: skip
+    return dienst.voorspeller(db, snap, temperaturen)
+
+
 @dataclass
 class Geladen:
     scenario: Scenario
@@ -284,6 +295,7 @@ def laad(db: Session, scenario_id: int) -> Geladen:
         instellingen=kern_instellingen(snap),
         licht=licht_invoer(db, snap, vandaag),
         gewas=gewas_invoer(db, snap),
+        voorspeller=voorspeller(db, snap),
     )
     return Geladen(scenario, rondes, teelten, veldwaarden, kappen, PlanInvoer(tuple(invoer)), parameters, snap)
 

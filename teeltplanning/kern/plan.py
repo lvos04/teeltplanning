@@ -18,10 +18,12 @@ from .licht import Rekenaar
 from .typen import KapInvoer, Melding, Parameters, Plan, PlanInvoer, TeeltInvoer, TeeltUitkomst
 
 
-def _licht_en_gewas(u: TeeltUitkomst, teelt: TeeltInvoer, rekenaar: Rekenaar | None, inv: gewas.GewasInvoer | None):
+def _licht_en_gewas(u: TeeltUitkomst, teelt: TeeltInvoer, rekenaar: Rekenaar | None, inv: gewas.GewasInvoer | None,
+                    voorspeller=None):  # fmt: skip
     plant = u.effectief["plantdatum"]
     meldingen = list(u.meldingen)
     effectief, voorstel, bron = dict(u.effectief), dict(u.voorstel), dict(u.bron)
+    toelichting = dict(u.toelichting)
     lichtsom = rekenaar.lichtsom(u.kap, plant, u.oogst) if rekenaar else None
     if lichtsom is not None and not lichtsom.bekend:
         van, tot, reden = lichtsom.ontbrekend[0]
@@ -51,6 +53,17 @@ def _licht_en_gewas(u: TeeltUitkomst, teelt: TeeltInvoer, rekenaar: Rekenaar | N
             if bron["dichtheid"] != "handmatig":
                 effectief["dichtheid"], bron["dichtheid"] = voorstel["dichtheid"], "voorstel"
         dichtheid = effectief["dichtheid"]
+        if voorstel.get("gewicht") is None and voorspeller is not None:
+            # Voorstelladder (§8.3): seizoensbasis → LBE-identiteit → ridge → bomen; een hogere trede alleen als
+            # hij in de backtest de lagere versloeg. Geen voorstel uit de ladder → de eigen LBE-berekening hieronder.
+            v = voorspeller.gewicht(teelt.rassen, plant, {"lichtsom": totaal, "dichtheid": dichtheid,
+                                                          "ld_dagen": effectief["ld_dagen"], "lbe": lbe})  # fmt: skip
+            if v is not None:
+                voorstel["gewicht"] = v.waarde
+                toelichting["gewicht"] = v
+                band = (v.ondergrens, v.bovengrens)
+                if bron["gewicht"] != "handmatig":
+                    effectief["gewicht"], bron["gewicht"] = v.waarde, "voorstel"
         if voorstel.get("gewicht") is None:
             voorstel["gewicht"] = gewas.takgewicht(gewas.productie(lbe, totaal), dichtheid)
             if voorstel["gewicht"] is not None and bron["gewicht"] != "handmatig":
@@ -71,7 +84,7 @@ def _licht_en_gewas(u: TeeltUitkomst, teelt: TeeltInvoer, rekenaar: Rekenaar | N
     energie = energie_teelt(rekenaar, u.kap, plant, u.oogst, oogstaantal) if rekenaar else None
     return replace(u, effectief=effectief, voorstel=voorstel, bron=bron, geplant=geplant, oogstaantal=oogstaantal,
                    meldingen=tuple(meldingen), lichtsom=lichtsom, energie=energie, lbe=keuze,
-                   dichtheid_onafgerond=dichtheid_ruw, gewicht_band=band)  # fmt: skip
+                   dichtheid_onafgerond=dichtheid_ruw, gewicht_band=band, toelichting=toelichting)  # fmt: skip
 
 
 def bereken_plan(invoer: PlanInvoer, parameters: Parameters) -> Plan:
@@ -82,7 +95,7 @@ def bereken_plan(invoer: PlanInvoer, parameters: Parameters) -> Plan:
     ketens = {}
     for kapnummer, teelten in per_kap.items():
         kap = parameters.kappen.get(kapnummer, KapInvoer(nummer=kapnummer))
-        ketens[kapnummer] = bereken_keten(teelten, kap, parameters.instellingen)
+        ketens[kapnummer] = bereken_keten(teelten, kap, parameters.instellingen, parameters.voorspeller)
     if rekenaar is not None:
         datums = [d for keten in ketens.values() for u in keten for d in (u.effectief["plantdatum"], u.oogst) if d]
         if datums:
@@ -91,7 +104,8 @@ def bereken_plan(invoer: PlanInvoer, parameters: Parameters) -> Plan:
     for kapnummer, keten in ketens.items():
         per_id = {t.id: t for t in per_kap[kapnummer]}
         for uitkomst in keten:
-            if rekenaar is not None or parameters.gewas is not None:
-                uitkomst = _licht_en_gewas(uitkomst, per_id[uitkomst.id], rekenaar, parameters.gewas)
+            if rekenaar is not None or parameters.gewas is not None or parameters.voorspeller is not None:
+                uitkomst = _licht_en_gewas(uitkomst, per_id[uitkomst.id], rekenaar, parameters.gewas,
+                                           parameters.voorspeller)  # fmt: skip
             uitkomsten[uitkomst.id] = uitkomst
     return Plan(teelten=uitkomsten)

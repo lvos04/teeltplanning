@@ -22,7 +22,8 @@ from .backups import maak_backup, pas_herstel_toe
 from .bronnen import dienst as bronnen_dienst
 from .db.basis import SessionLocal, engine
 from .db.modellen import Kap, Lampgroep, Ras
-from .web import routes_afdruk, routes_auth, routes_beheer, routes_import, routes_licht, routes_plan
+from .voorstel import dienst as model_dienst
+from .web import routes_afdruk, routes_auth, routes_beheer, routes_import, routes_licht, routes_model, routes_plan
 from .web.sjablonen import MAP, templates
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -105,6 +106,10 @@ async def achtergrond() -> None:
             await asyncio.to_thread(bronnen_dienst.ververs_als_nodig)
         except Exception:
             log.exception("Bijwerken van externe bronnen mislukt")
+        try:
+            await asyncio.to_thread(model_dienst.hertrain_als_nodig)
+        except Exception:
+            log.exception("Automatisch hertrainen mislukt")
 
 
 @asynccontextmanager
@@ -224,5 +229,6 @@ app.include_router(routes_plan.router)
 app.include_router(routes_import.router)
 app.include_router(routes_afdruk.router)
 app.include_router(routes_licht.router)
+app.include_router(routes_model.router)
 app.include_router(routes_beheer.router)
 app.mount("/static", StaticFiles(directory=str(MAP / "static")), name="static")
