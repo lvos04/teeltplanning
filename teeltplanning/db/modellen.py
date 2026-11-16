@@ -121,6 +121,7 @@ class Scenario(Base):
     status: Mapped[str] = mapped_column(String(20), default="concept")  # concept | vastgesteld
     afgeleid_van: Mapped[int | None] = mapped_column(ForeignKey("scenario.id"), nullable=True)
     aangemaakt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    vastgesteld_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     __table_args__ = (
         # Er is hooguit één vastgesteld plan.
         Index("ix_scenario_een_vastgesteld", "status", unique=True, sqlite_where=text("status = 'vastgesteld'")),
@@ -385,3 +386,35 @@ class Modelversie(Base):
     aantal_waarnemingen: Mapped[int | None] = mapped_column(Integer, nullable=True)
     herkomst: Mapped[Any] = mapped_column(JSON, nullable=True)  # aantallen per bron, overgeslagen
     artefact: Mapped[Any] = mapped_column(JSON, nullable=True)
+
+
+# --- Fase 5: afzetpieken, genereren en zoeken --------------------------------------------------------------
+class Afzetmoment(Base):
+    """Afzetmoment (§8.1) met een datumregel (zie kern/afzet.py). `bevestigd` = door de teler bevestigd."""
+
+    __tablename__ = "afzetmoment"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100), unique=True)
+    datumregel: Mapped[str] = mapped_column(String(200))
+    venster_dagen_voor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gewicht: Mapped[float | None] = mapped_column(Float, nullable=True)  # belang 0–10
+    markt: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actief: Mapped[bool] = mapped_column(Boolean, default=True)
+    bevestigd: Mapped[bool] = mapped_column(Boolean, default=False)
+    opmerking: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Zoekrun(Base):
+    """Eén zoekactie (§8.2): de voorstellen als lijst. Niets wordt automatisch toegepast."""
+
+    __tablename__ = "zoekrun"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scenario_id: Mapped[int] = mapped_column(ForeignKey("scenario.id"), index=True)
+    jaar: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="bezig")  # bezig | klaar | mislukt
+    gestart_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    klaar_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    gestart_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+    melding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uitkomst: Mapped[Any] = mapped_column(JSON, nullable=True)
+    toegepast: Mapped[Any] = mapped_column(JSON, nullable=True)  # lijst met nummers van toegepaste voorstellen

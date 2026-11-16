@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block titel %}Scenario's{% endblock %}
+{% block inhoud %}
+<h1>Scenario's</h1>
+<p>Er is altijd hooguit één <strong>vastgesteld</strong> plan; alleen dat wordt via de bedrijfskoppeling gedeeld. Genereren en de zoekfunctie werken in een <strong>concept</strong>: maak eerst een kopie.</p>
+<table class="lijst"><thead><tr><th>scenario</th><th>status</th><th>teelten</th><th>afgeleid van</th><th>acties</th></tr></thead><tbody>
+{% for s in scenarios %}<tr><td><a href="/ronde?scenario={{ s.id }}">{{ s.naam }}</a></td><td>{{ s.status }}{% if s.vastgesteld_op %} <small>({{ s.vastgesteld_op|tijd }})</small>{% endif %}</td>
+<td>{{ tellingen.get(s.id, 0) }}</td><td>{{ s.afgeleid_van or '' }}</td>
+<td>
+  <a href="/jaar?scenario={{ s.id }}&jaar={{ jaar }}">jaaroverzicht</a>
+  {% if kan_schrijven %}
+  <form method="post" action="/scenarios/{{ s.id }}/kopie" class="inline"><input name="naam" placeholder="naam kopie" required size="14"><button>Kopiëren</button></form>
+  {% if s.status == 'concept' %}
+  <form method="post" action="/scenarios/{{ s.id }}/genereren" class="inline"><input name="jaar" size="5" placeholder="jaar" aria-label="jaar"> of <input name="rondes" size="3" placeholder="rondes" aria-label="aantal rondes"><input name="start" size="10" placeholder="start JJJJ-MM-DD" aria-label="startdatum (kappen zonder teelt)"><button>Genereren</button></form>
+  {% endif %}
+  <form method="post" action="/scenarios/{{ s.id }}/zoeken" class="inline"><input name="jaar" size="5" value="{{ jaar }}" aria-label="jaar"><button>Zoeken</button></form>
+  {% endif %}
+  {% if gebruiker.rol == 'beheerder' and s.status != 'vastgesteld' %}<form method="post" action="/scenarios/{{ s.id }}/vaststellen" class="inline"><button>Vaststellen</button></form>{% endif %}
+</td></tr>{% else %}<tr><td colspan="5">Nog geen scenario's: importeer een werkboek.</td></tr>{% endfor %}
+</tbody></table>
+<p><a class="knop" href="/scenarios/vergelijk">Twee scenario's vergelijken</a></p>
+<h2>Genereren</h2>
+<p class="hulp">Vult per kap de ketting vooruit met voorstellen (ras volgens de rasverdeling, LD-dagen, verlenging en reactietijd uit het model of de terugvalwaarden). Een jaar moet leeg zijn. Handmatige waarden worden nooit aangemaakt of gewijzigd.
+Rasverdeling: {% if rasverdeling %}{% for r in rasverdeling %}{{ r.ras }} {{ r.aandeel }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}<span class="onbekend">niet ingesteld</span> (dan het ras van de vorige teelt){% endif %} — <a href="/beheer/instellingen?groep=Genereren">Instellingen → Genereren</a>.</p>
+<h2>Zoeken</h2>
+<p class="hulp">Probeert kleine wijzigingen (plantdag, LD-dagen, verlenging, ras wisselen) en geeft een <strong>lijst met voorstellen</strong>; er wordt niets automatisch toegepast en handmatige waarden blijven vast. Gewichten:
+{% for n, g in gewichten.items() %}{{ n }} {% if g is none %}<span class="onbekend">niet ingesteld</span>{% else %}{{ g }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %} — <a href="/beheer/instellingen?groep=Zoeken">Instellingen → Zoeken</a>.</p>
+{% if runs %}<table class="lijst"><thead><tr><th>zoekactie</th><th>scenario</th><th>jaar</th><th>status</th><th>melding</th></tr></thead><tbody>
+{% for r in runs %}<tr><td><a href="/zoeken/{{ r.id }}">#{{ r.id }}</a> {{ r.gestart_op|tijd }}</td><td>{{ r.scenario_id }}</td><td>{{ r.jaar }}</td><td>{{ r.status }}</td><td>{{ r.melding or '' }}</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+{% endblock %}

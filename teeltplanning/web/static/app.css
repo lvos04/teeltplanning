@@ -39,3 +39,9 @@ section.instelling { border-top: 1px solid var(--rand); padding: .4rem 0; } sect
 .onbekend { color: #888; font-style: italic; }
 #raster-melding .melding { position: sticky; left: 0; }
 .knop { display: inline-block; padding: .3rem .8rem; border-radius: 4px; background: var(--kop); color: #fff; text-decoration: none; margin-right: .4rem; }
+table.jaar td { min-width: 1.4rem; padding: 1px 2px; text-align: center; font-size: 11px; }
+table.jaar td.tekst { text-align: left; white-space: normal; max-width: 5rem; font-size: 10px; }
+.fase-P { background: #cfe8d6; } .fase-LD { background: #6cbf84; color: #fff; } .fase-KD { background: #7f63b8; color: #fff; } .fase-O { background: #e3a008; color: #fff; }
+th.lage-prijs { background: #fde2e1 !important; } tr.som td { background: #f3f5f7; }
+.scroll { overflow-x: auto; } tr.gekozen td { background: #eef7f0; } .status-gevalideerd { color: #1a7f37; font-weight: 600; }
+.uitleg { margin-top: .2rem; } ol.voorstellen li { margin: .3rem 0; }

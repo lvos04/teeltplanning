@@ -155,6 +155,10 @@ def bereken_teelt(
         meldingen.append(
             Melding("geen_plantdag", "waarschuwing", "De plantdatum valt niet op een toegestane plantdag.")
         )
+    if oogstdatum is not None and inst.oogstdagen and oogstdatum.isoweekday() not in inst.oogstdagen:
+        meldingen.append(
+            Melding("geen_oogstdag", "waarschuwing", "De oogstdatum valt niet op een toegestane oogstdag.")
+        )
 
     oppervlak = kap.oppervlak_m2 if kap.oppervlak_m2 is not None else waarde_op(inst.oppervlak_per_kap, plant)
     geplant = gewas.geplant(effectief["dichtheid"], oppervlak)

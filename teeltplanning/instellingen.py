@@ -61,7 +61,7 @@ class Instelling:
 
 GROEPEN = (
     "Bedrijf", "Kalender", "Datumketen", "Licht", "Lampen", "Gewas", "Voorstellen", "Model", "Energie", "Afzet",
-    "Zoeken", "Teeltkaart", "Afdrukken", "Import", "Bronnen", "Koppeling", "Beveiliging", "Systeem",
+    "Zoeken", "Genereren", "Teeltkaart", "Afdrukken", "Import", "Bronnen", "Koppeling", "Beveiliging", "Systeem",
 )  # fmt: skip
 
 _STREEFLENGTE = [
@@ -226,7 +226,36 @@ REGISTER_LIJST: list[Instelling] = [
       "Kostenverdeling per tak naast stroom (bijv. stek, pluizen en netten, overig), voor de scenariovergelijking.", "tabel", [],
       kolommen=(Kolom("post", "tekst", "post"), Kolom("eur_per_tak", "getal", "€ per tak", null=True, min=0, max=100)), fase=3),
     I("afzet.landen", "Afzet", "Landen voor officiële feestdagen", "Landcodes voor het pakket holidays.", "lijst", ["NL", "BE", "DE", "GB", "FR", "PL", "IT", "ES"], fase=5),
-    I("zoeken.max_rekentijd_s", "Zoeken", "Maximale rekentijd zoekfunctie", "Hoe lang de zoekfunctie mag rekenen.", "getal", None, "s", min=1, max=3600, null=True, fase=5),
+    I("afzet.lage_prijs_weken", "Afzet", "Weken met veel aanvoer en lage prijs",
+      "Markering in het jaaroverzicht en de vergelijking (§8.1). Leeg = onbekend.", "tabel", [],
+      kolommen=(Kolom("week_van", "geheel", "week van", min=1, max=53), Kolom("week_tot", "geheel", "week t/m", min=1, max=53),
+                Kolom("reden", "tekst", "reden", null=True)), vraag="B35", fase=5),
+    I("zoeken.gewicht_afzet", "Zoeken", "Gewicht dekking afzetmomenten", "Belang van de aanvoer in de vensters van de afzetmomenten (× hun belang). Leeg = telt niet mee.",
+      "getal", None, min=0, max=1000, null=True, vraag="B36", fase=5),
+    I("zoeken.gewicht_gelijkmatig", "Zoeken", "Gewicht gelijkmatige weekoogst", "Belang van een gelijkmatige oogst per week. Leeg = telt niet mee.",
+      "getal", None, min=0, max=1000, null=True, vraag="B36", fase=5),
+    I("zoeken.gewicht_doelgewicht", "Zoeken", "Gewicht doelgewicht", "Belang van de afwijking van het doelgewicht. Leeg = telt niet mee.",
+      "getal", None, min=0, max=1000, null=True, vraag="B36", fase=5),
+    I("zoeken.gewicht_energie", "Zoeken", "Gewicht energiekosten", "Belang van de stroomkosten (of kWh als de prijs onbekend is). Leeg = telt niet mee.",
+      "getal", None, min=0, max=1000, null=True, vraag="B36", fase=5),
+    I("zoeken.zetten", "Zoeken", "Wijzigingen die de zoekfunctie probeert", "Handmatige waarden worden nooit gewijzigd.", "lijst",
+      ["plantdag", "ld_dagen", "verlenging", "ras_wisselen"], keuzes=("plantdag", "ld_dagen", "verlenging", "ras_wisselen"), fase=5),
+    I("zoeken.stap_plantdag", "Zoeken", "Stapgrootte plantdag", "Plantdatum ± dit aantal dagen.", "geheel", 1, "dagen", min=1, max=14, fase=5),
+    I("zoeken.stap_ld_dagen", "Zoeken", "Stapgrootte LD-dagen", "LD-dagen ± dit aantal.", "geheel", 1, "dagen", min=1, max=14, fase=5),
+    I("zoeken.max_voorstellen", "Zoeken", "Maximum aantal voorstellen", "Lengte van de lijst met voorstellen. Technische startwaarde.", "geheel", 20, min=1, max=500, fase=5),
+    I("zoeken.max_rekentijd_s", "Zoeken", "Maximale rekentijd zoekfunctie", "Daarna stopt het zoeken met de voorstellen tot dan toe. Technische startwaarde.",
+      "getal", 30, "s", min=1, max=3600, fase=5),
+    I("genereren.rasverdeling", "Genereren", "Rasverdeling", "Aandeel per ras bij genereren (§8.2). Leeg = het ras van de vorige teelt in de kap.",
+      "tabel", [], kolommen=(Kolom("ras", "tekst", "ras"), Kolom("aandeel", "getal", "aandeel", min=0, max=1000)), vraag="B37", fase=5),
+    I("genereren.ld_dagen_terugval", "Genereren", "LD-dagen zonder voorstel", "Als het model geen voorstel heeft. Leeg = onbekend (de ketting stopt).",
+      "geheel", None, "dagen", min=0, max=365, null=True, vraag="B38", fase=5),
+    I("genereren.reactietijd_terugval", "Genereren", "Reactietijd zonder voorstel", "Als het model geen voorstel heeft. Leeg = onbekend (de ketting stopt).",
+      "geheel", None, "dagen", min=0, max=365, null=True, vraag="B38", fase=5),
+    I("genereren.verlenging_terugval", "Genereren", "Verlenging zonder voorstel", "Als het model geen voorstel heeft. Leeg = onbekend (de ketting stopt).",
+      "geheel", None, "dagen", min=0, max=60, null=True, vraag="B38", fase=5),
+    I("genereren.kappen_per_plantdag", "Genereren", "Kappen per plantdag",
+      "Voor kappen zonder eerdere teelt: zoveel kappen per toegestane plantdag vanaf de startdatum. Leeg = alle op de eerste plantdag.",
+      "geheel", None, min=1, max=500, null=True, vraag="B38", fase=5),
     # --- Teeltkaart (fase 2) -----------------------------------------------------------------------------
     I("teeltkaart.streeflengte", "Teeltkaart", "Streeflengtetabel", "Streeflengte in cm per LD-dag en seizoen (uit het werkboek, §9.2). Leeg = geen waarde op de kaart.", "tabel",
       STREEFLENGTE_START, kolommen=(Kolom("ld_dag", "geheel", "LD-dag", min=0, max=100),) + tuple(Kolom(s, "geheel", s, null=True, min=0, max=500)

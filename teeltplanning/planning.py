@@ -156,6 +156,7 @@ def kern_instellingen(snap: instellingen.Snapshot) -> KernInstellingen:
         uitval_per_oogstweek=uitval,
         grenzen=grenzen,
         overlap_blokkeert=snap["keten.overlap"] == "blokkeren",
+        oogstdagen=frozenset(snap["kalender.oogstdagen"] or ()),
     )
 
 

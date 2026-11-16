@@ -17,6 +17,7 @@ from datetime import date, timedelta
 from .licht import UMOL_UREN_NAAR_MOL, Rekenaar
 
 KILO = 1000
+DAGEN_PER_WEEK = 7
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,36 @@ def per_kap_per_week(rekenaar: Rekenaar, kappen: list[int], van: date, tot: date
             soort = r["soorten"].pop() if len(r["soorten"]) == 1 else "gemengd"
             uit.append(Weekenergie(kap, jaar, week, None if r["kwh_onbekend"] else r["kwh"],
                                    None if (r["kwh_onbekend"] or r["prijs_onbekend"]) else r["kosten"], None, soort))  # fmt: skip
+    return uit
+
+
+def per_teelt_per_week(rekenaar: Rekenaar, uitkomsten) -> list[Weekenergie]:
+    """kWh en kosten van het plan per kap per ISO-week: alleen de dagen waarop er een teelt in de kap staat
+    (plantdatum t/m de dag vóór de oogst). Een week met één onbekende dag is onbekend."""
+    weken: dict[tuple[int, int, int], dict] = {}
+    for u in uitkomsten:
+        van, tot = u.effectief["plantdatum"], u.oogst
+        if van is None or tot is None or tot <= van:
+            continue
+        d = van
+        while d < tot:
+            iso = d.isocalendar()
+            eind = min(tot, d + timedelta(days=DAGEN_PER_WEEK - iso.weekday + 1))
+            kwh, bedrag, zonder_kwh, zonder_prijs = rekenaar.energie_som(u.kap, d, eind)
+            r = weken.setdefault((u.kap, iso.year, iso.week), {"kwh": 0.0, "kosten": 0.0, "kwh_onbekend": False,
+                                                                "prijs_onbekend": False, "soorten": set()})  # fmt: skip
+            r["kwh"] += kwh
+            r["kosten"] += bedrag
+            r["kwh_onbekend"] |= bool(zonder_kwh)
+            r["prijs_onbekend"] |= bool(zonder_prijs)
+            r["soorten"].add("gerealiseerd" if eind <= rekenaar.inv.peildatum else
+                             "gepland" if d >= rekenaar.inv.peildatum else "gemengd")  # fmt: skip
+            d = eind
+    uit = []
+    for (kap, jaar, week), r in sorted(weken.items()):
+        soort = next(iter(r["soorten"])) if len(r["soorten"]) == 1 else "gemengd"
+        uit.append(Weekenergie(kap, jaar, week, None if r["kwh_onbekend"] else r["kwh"],
+                               None if (r["kwh_onbekend"] or r["prijs_onbekend"]) else r["kosten"], None, soort))  # fmt: skip
     return uit
 
 

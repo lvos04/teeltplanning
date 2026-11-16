@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block titel %}Afzetmomenten{% endblock %}
+{% block inhoud %}
+<h1>Afzetmomenten {{ jaar - 1 }}–{{ jaar + 1 }}</h1>
+<p>Datumregels en belang staan in <a href="/beheer/tabel/afzetmomenten">Beheer → Afzetmomenten</a>. De startinhoud komt uit het bouwplan en is <strong>nog niet door de teler bevestigd</strong>; venster en belang zijn onbekend tot ze zijn ingevuld (vraag 9).</p>
+{% for m in meldingen %}<div class="melding fout">{{ m }}</div>{% endfor %}
+<table class="lijst"><thead><tr><th>moment</th><th>datum</th><th>week-dag</th><th>venster (oogst)</th><th>belang</th><th>markt</th><th>bevestigd</th></tr></thead><tbody>
+{% for md in momenten %}<tr><td>{{ md.moment.naam }}</td><td>{{ md.datum }}</td><td>{{ weergave(md.datum, 'week-dag-jaar') }}</td>
+<td>{% if md.venster %}{{ md.venster[0] }} t/m {{ md.venster[1] }}{% else %}<span class="onbekend">onbekend</span>{% endif %}</td>
+<td>{{ md.moment.gewicht if md.moment.gewicht is not none else 'onbekend' }}</td><td>{{ md.moment.markt or '' }}</td><td>—</td></tr>{% endfor %}
+</tbody></table>
+<h2>Terugrekenen</h2>
+<p class="hulp">plantdatum = gewenste oogstdatum − reactietijd − verlenging − LD-dagen</p>
+<form method="get" class="inline">
+  <input type="hidden" name="jaar" value="{{ jaar }}">
+  <input name="oogst" value="{{ v.oogst }}" placeholder="oogst JJJJ-MM-DD" size="11" aria-label="gewenste oogstdatum">
+  <input name="ld" value="{{ v.ld }}" placeholder="LD" size="3" aria-label="LD-dagen">
+  <input name="rt" value="{{ v.rt }}" placeholder="RT" size="3" aria-label="reactietijd">
+  <input name="verl" value="{{ v.verl }}" placeholder="verl." size="3" aria-label="verlenging"><button>Reken</button>
+</form>
+{% if terug %}<p>Plantdatum: <strong>{{ terug }}</strong> ({{ weergave(terug, 'week-dag-jaar') }})</p>{% endif %}
+<h2>Officiële feestdagen {{ jaar }}</h2>
+{% if onbekende_landen %}<p class="melding waarschuwing">Onbekende landcodes: {{ onbekende_landen|join(', ') }}</p>{% endif %}
+<table class="lijst"><thead><tr><th>datum</th><th>land</th><th>feestdag</th></tr></thead><tbody>
+{% for d, land, naam in feestdagen %}<tr><td>{{ d }}</td><td>{{ land }}</td><td>{{ naam }}</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

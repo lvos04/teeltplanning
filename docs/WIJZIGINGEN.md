@@ -72,3 +72,23 @@ het register, onbekende waarden zijn `null` met een verwijzing naar OPEN_VRAGEN.
 * Nieuwe instellingen in *Voorstellen* (per veld aan/uit, minimum, bandbreedte, aantal vergelijkbare teelten) en
   *Model* (treden, kenmerken, monotone beperkingen, drempel, backtestperiode, minimum toetsteelten,
   hyperparameters, automatisch hertrainen, rekentijd). Database: migratie `0004` (tabel `modelversie`).
+
+## 0.6.0 — fase 5: afzetpieken, genereren en zoeken
+
+* Afzetmomenten (§8.1) als beheertabel met datumregels (`vast`, `pasen`, `weekdag`, `voor`, `… behalve … dan …`),
+  venster, belang, markt, actief en "bevestigd"; startinhoud de negen bloemendagen uit het bouwplan (onbevestigd,
+  venster en belang onbekend). Officiële feestdagen per land met het pakket `holidays` (lokaal). Scherm *Afzet*
+  met datums, terugrekenen en feestdagen.
+* Genereren (§8.2): per kap de ketting vooruit vullen in een conceptscenario, met rasverdeling, voorstellen uit de
+  voorstelladder of terugvalwaarden, binnen de grenzen, op toegestane plant- en oogstdagen. Alleen voorstellen,
+  nooit handmatige waarden; een jaar moet leeg zijn.
+* Zoekfunctie (§8.2): lokale, gretige zoekactie (plantdag, LD-dagen, verlenging, ras wisselen) op vier instelbare
+  onderdelen; levert een lijst met voorstellen in gewone zinnen; draait op de achtergrond in een apart proces.
+  Niets wordt automatisch toegepast; toepassen per voorstel of alles, nooit over een handmatige waarde heen.
+* Scenario's: kopiëren, vaststellen (precies één vastgesteld), vergelijken op oogst per week, afzetdekking en kWh.
+* Jaaroverzicht: kappen × weken (planten, lange dag, korte dag, oogst), oogst en kWh per week, afzetmomenten,
+  feestdagen en weken met lage prijs.
+* Kern: `kern/afzet.py`, `kern/genereren.py`, `kern/zoeken.py`, `bereken_kap`, kWh per kap per week van het plan,
+  toegestane oogstdagen (waarschuwing). Nieuwe instellingen in *Afzet*, *Zoeken* en de nieuwe groep *Genereren*.
+* Nieuwe afhankelijkheid: `holidays` (met `python-dateutil`). Database: migratie `0005` (`afzetmoment`, `zoekrun`,
+  `scenario.vastgesteld_op`).

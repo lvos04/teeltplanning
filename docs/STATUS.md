@@ -233,3 +233,28 @@ Verder in fase 4:
 
 * `pytest`: 145 geslaagd, 5 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon.
 * Image: geen nieuwe pakketten (zie fase 6 voor de containerbuild).
+
+## Fase 5 — Afzetpieken, genereren en zoeken (versie 0.6.0)
+
+| Klaar als | Uitkomst |
+|---|---|
+| Elke datumregel is getest tegen minstens drie bekende jaren | **Gedaan.** `tests/test_afzet.py`: alle negen startregels tegen 2024, 2025, 2026 en 2027 (Valentijnsdag, Vrouwendag, Britse moederdag 10-3/30-3/15-3/7-3, Pasen 31-3/20-4/5-4/28-3, moederdag 12-5/11-5/10-5/9-5, Franse moederdag 26-5/25-5/31-5/30-5 plus de Pinksteruitzondering in 2004 (6 juni), Allerheiligen, Totensonntag 24-11/23-11/22-11/21-11, Kerst); Pasen ook tegen het pakket `holidays`; foute regels geven een uitleg en worden in Beheer geweigerd. De regels zelf zijn **nog niet door de teler bevestigd** (zo gemarkeerd in de app); venster en belang zijn onbekend (vraag 9, B39). |
+| Genereren levert voor een leeg jaar een volledig, conflictvrij plan op | **Synthetisch: gedaan.** Kern (`test_genereren_leeg_jaar_volledig_en_conflictvrij`): 40 kappen, leeg jaar 2025, rasverdeling 5:3:2, vier kappen per plantdag, oogst alleen op werkdagen → elke teelt heeft plantdatum, LD-dagen, reactietijd, verlenging en oogst, geen fout, geen overlap, geen verkeerde plant- of oogstdag, en elke kap is gevuld tot het eind van het jaar. Webapp (`test_web_genereren_zoeken_vergelijken`): synthetisch werkboek importeren, model trainen, kopie maken, het eerste lege jaar genereren → alle actieve kappen gevuld, volledig en conflictvrij, rassen toegekend, **geen enkele handmatige waarde** aangemaakt; een tweede keer voor hetzelfde jaar wordt geweigerd; in het vastgestelde plan wordt genereren geweigerd. Met echte gegevens: rasverdeling en eventueel terugvalwaarden ontbreken nog (B37, B38). |
+| De zoekfunctie past niets automatisch toe en raakt geen handmatige waarden; dat staat in een test | **Gedaan.** `test_zoeken_past_niets_toe_en_raakt_geen_handmatige_waarden` (kern: invoer en plan na het zoeken identiek, geen voorstel voor een handmatig veld, het eerste voorstel verschuift een oogst in het moederdagvenster) en `test_web_genereren_zoeken_vergelijken` (webapp: alle `veldwaarde`-regels vóór en na het zoeken gelijk; een voorstel voor een veld dat intussen handmatig is, wordt geweigerd en de handmatige waarde blijft; toepassen zet een handmatige waarde met reden "zoekvoorstel …"). |
+| Twee scenario's zijn naast elkaar te vergelijken op oogst per week, afzetdekking en kWh | **Synthetisch: gedaan.** *Scenario's → Twee scenario's vergelijken*: per week oogst A/B/verschil en kWh A/B/verschil, per afzetmoment venster, belang en dekking A/B/verschil, met totalen (test). kWh telt alleen dagen met een teelt in de kap; met echte gegevens is kWh onbekend tot de lampgroepmaanden bekend zijn (vraag 1). |
+
+Verder in fase 5:
+
+* **Jaaroverzicht** (*Jaar*): kappen × weken (P, LD, KD, O), oogst en kWh per week, afzetmomenten, feestdagen
+  (aantal, met namen als tooltip) en de markering "lage prijs" (B35).
+* **Scenario's**: kopiëren, vaststellen (beheerder; het vorige wordt concept), genereren en zoeken per scenario.
+* **Zoeken** draait op de achtergrond in een apart proces met de ingestelde maximale rekentijd (start 30 s): op het
+  synthetische plan 3 voorstellen uit ±4.900 geprobeerde wijzigingen in ±20 s. Zonder ingestelde gewichten (B36)
+  geeft de zoekfunctie geen voorstellen, met die uitleg.
+* **Toegestane oogstdagen** (*Kalender*, start onbekend): als ze zijn ingevuld, krijgt een oogst op een andere dag
+  een waarschuwing en kiest genereren een verlenging die past.
+
+### Tests fase 5
+
+* `pytest`: 171 geslaagd, 5 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon.
+* Nieuwe afhankelijkheid `holidays` 0.107 (+ `python-dateutil`, `six`; ±10 MB).
