@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+.env
+data/
+*.sqlite*
+*.db
+# Bedrijfsgegevens horen nooit in de repo (BOUWPLAN §0.4)
+*.xlsx
+*.xlsm
+*.xls
+!tests/synthetisch/*.xlsx
+/proeven/uitvoer/
