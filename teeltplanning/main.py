@@ -21,13 +21,19 @@ from .auth import NietAangemeld
 from .backups import maak_backup, pas_herstel_toe
 from .db.basis import SessionLocal, engine
 from .db.modellen import Kap, Ras
-from .web import routes_auth, routes_beheer, routes_import, routes_plan
+from .web import routes_afdruk, routes_auth, routes_beheer, routes_import, routes_plan
 from .web.sjablonen import MAP, templates
 
 ROOT = Path(__file__).resolve().parent.parent
 log = logging.getLogger("teeltplanning")
 MAX_VERZOEK = 1024 * 1024  # 1 MB, behalve bij imports en het terugzetten van een back-up (§12)
-UPLOADPADEN = ("/import/upload", "/beheer/backup/herstel", "/beheer/instellingen/import")
+UPLOADPADEN = (
+    "/import/upload",
+    "/beheer/backup/herstel",
+    "/beheer/instellingen/import",
+    "/beheer/sjabloon/upload",
+    "/beheer/sjabloon/lettertype",
+)
 
 # Startgegevens die het bouwplan noemt: rassen a/p/t/b = Antonov/Pjotr/Tutu/Baltazar (§5), zonder doelgewicht.
 START_RASSEN = (("a", "Antonov"), ("p", "Pjotr"), ("t", "Tutu"), ("b", "Baltazar"))
@@ -190,5 +196,6 @@ def health() -> dict:
 app.include_router(routes_auth.router)
 app.include_router(routes_plan.router)
 app.include_router(routes_import.router)
+app.include_router(routes_afdruk.router)
 app.include_router(routes_beheer.router)
 app.mount("/static", StaticFiles(directory=str(MAP / "static")), name="static")

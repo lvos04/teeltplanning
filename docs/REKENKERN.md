@@ -85,3 +85,19 @@ Per kapregel rekent de app licht uit, bloei en teeltduur met echte datums uit de
 toont, en vergelijkt met de gecachte uitkomst. Klassen: `gelijk`, `52_weken` (de afwijking is precies de
 52-wekenfout van het werkboek: week-dag + dagen met 52 weken per jaar geeft de cache), `afwijking`
 (onverklaard) en `onvolledig`.
+
+## Teeltkaart (`kern/teeltkaart.py`, §9.2)
+
+```
+eerste meetmoment = eerstvolgende meetdag ≥ licht uit       [Teeltkaart → Weekdagen van de meetmomenten, start ma/wo/vr]
+volgende momenten = steeds de volgende meetdag (ma→wo +2, wo→vr +2, vr→ma +3), [Aantal meetmomenten, start 16]
+LD-dag            = moment − licht uit (dagen)
+seizoen           = seizoen van de plantweek                 [start winter 43–52, voorjaar 1–6, zomer 7–36, najaar 37–42]
+streeflengte      = tabel[LD-dag][seizoen]                   [Streeflengtetabel; geen waarde = leeg]
+slak/remstof/pluizen/netten = licht uit + offset             [start onbekend → leeg]
+```
+
+Dit is precies de werkboekregel "weekdag licht uit 1…7 → moment op weekdag 1, 3, 3, 5, 5, 1, 1 en LD-dag 0, 1, 0,
+1, 0, 2, 1" (test `test_eerste_moment_zoals_werkboek`). Voorbeeld: plant 2 maart 2026 (10-1), LD 9 → licht uit
+woensdag 11 maart (11-3); momenten 11-3 (LD 0), 11-5 (2), 12-1 (5), 12-3 (7) … tot LD 35; plantweek 10 = zomer,
+dus LD 7 → 35 cm. Een plantweek 53 valt in geen seizoen: streeflengte leeg met melding (open vraag B16).

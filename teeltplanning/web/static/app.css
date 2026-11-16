@@ -38,3 +38,4 @@ table.lijst, table.lagen, table.ketting, table.bewijs { border-collapse: collaps
 section.instelling { border-top: 1px solid var(--rand); padding: .4rem 0; } section.instelling p { margin: .2rem 0; }
 .onbekend { color: #888; font-style: italic; }
 #raster-melding .melding { position: sticky; left: 0; }
+.knop { display: inline-block; padding: .3rem .8rem; border-radius: 4px; background: var(--kop); color: #fff; text-decoration: none; margin-right: .4rem; }

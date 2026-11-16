@@ -43,3 +43,27 @@ tests/             # pytest; tests/synthetisch.py maakt de synthetische werkboek
 | Herimport | Een handmatige waarde onthoudt zijn bron (`gebruiker` of `import:<nr>`); een herimport overschrijft alleen waarden die van een import kwamen | §4.2, fase 1 |
 | Instellingen | Eén regel per wijziging in tabel `instelling` (met optionele ingangsdatum); de nieuwste geldt; "terug naar startwaarde" is ook een regel, zodat de historie compleet blijft | §4.3 |
 | Herstel via Beheer | Gecontroleerd klaarzetten, toepassen bij de volgende start (nooit over een draaiende database) | §12 |
+
+## Fase 2: afdrukken
+
+```
+teeltplanning/
+  xlsxpakket.py      # XLSX-pakket bewerken zonder openpyxl-opslag: waarden in werkblad-XML, formules bevriezen,
+                     # afdrukinstellingen, afdrukkopie met alleen de gevraagde bladen, bladen kopiëren
+  beeld.py           # pdf → grijswaardenafbeelding (pdftoppm) en pixelvergelijking (controle, niet in de image)
+  kern/teeltkaart.py # meetmomenten, LD-dag, seizoen, streeflengte, behandelingen (zuiver)
+  afdruk/kaart.py    # instellingen → KaartInstellingen; kaart/rondeblad → cel → waarde
+  afdruk/dienst.py   # plan → gevuld sjabloon (route A) → pdf (route B), paginacontrole
+  afdruk/pdf.py      # LibreOffice-conversie: eigen profiel, tijdslimiet, één tegelijk, geen netwerk, lettertypen
+  afdruk/sjabloon.py # sjabloon uploaden/controleren, lettertypen
+  afdruk/controle.py # het werkboek in LibreOffice herberekenen voor N kaarten en vergelijken; CLI
+  web/routes_afdruk.py
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Afdrukkopie | Alleen de af te drukken bladen in `workbook.xml`; andere werkbladen, externe koppelingen, draaitabelcaches en namen eruit; formules in de gevulde bladen bevroren of leeggemaakt | LibreOffice drukt ook verborgen bladen af (proef 2); formules zouden naar weggelaten bladen wijzen |
+| Formules die de app niet vult | Standaard **leegmaken** (instelling), en in Beheer → Sjabloon gemeld | een gecachte waarde uit het sjabloon hoort bij de kap die er toevallig in stond |
+| Celtoewijzing | Rondeblad = kolomtoewijzing van de importer; teeltkaart = eigen toewijzing in het register, tweede kaart = verschuiving in kolommen | importeren en afdrukken gebruiken dezelfde cellen; Leon kan een verplaatste cel zelf aanpassen |
+| Netwerk bij conversie | `unshare -rn` als het mag, anders een proxy naar `127.0.0.1:9`; externe koppelingen zitten niet in de kopie | in de container (Docker-standaardprofiel) is een eigen netwerknaamruimte niet toegestaan |
+| Controle tegen het werkboek | Het werkboek zelf door LibreOffice laten herberekenen (met `fullCalcOnLoad` en een profiel dat altijd herberekent) | een onafhankelijke rekenweg; geen eigen formule-interpreter |

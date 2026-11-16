@@ -24,3 +24,19 @@
 
 Nieuwe instellingen: zie *Beheer → Instellingen* of `teeltplanning/instellingen.py`; alle startwaarden staan in
 het register, onbekende waarden zijn `null` met een verwijzing naar OPEN_VRAGEN.md.
+
+## 0.3.0 — fase 2: afdrukken en teeltkaart
+
+* Sjabloonbeheer (Beheer → Sjabloon): eigen werkboek uploaden naar `/data/sjabloon/`, controle van bladen,
+  afdrukbereik, lettertypen (uploaden naar `/data/lettertypen/`) en niet-gevulde formules; controleafdruk met
+  veldnamen.
+* Teeltkaart volgens §9.2 (`kern/teeltkaart.py`): meetmomenten, LD-dag, streeflengte per seizoen van de plantweek.
+* Afdrukken (scherm *Afdrukken*): rondeblad en teeltkaart als Excel (gevuld sjabloon, route A) en als pdf via
+  LibreOffice in de container (route B), alle 40 kaarten in één bestand (20 bladen), kaart op te vragen met alleen
+  kap en ronde; paginacontrole; bij een mislukte pdf een melding en het Excel-bestand.
+* Controle tegen het werkboek: `python -m teeltplanning.afdruk.controle` (tien steekproefkaarten via LibreOffice
+  herberekend) en overleggen als afbeelding (tests).
+* Nieuwe instellingen in de groep Afdrukken (afdrukbereik, richting, papier, celtoewijzing teeltkaart, tijdslimiet
+  120 s, metrisch gelijke lettertypen, …). Validatie van celverwijzingen en toegestane velden in toewijzingen.
+* Database: migratie `0002` (tabel `sjabloon`).
+* CI: poppler-utils voor pdf-tekst en overleggen; rooktest met pdf-conversie in de container.

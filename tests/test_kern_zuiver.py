@@ -10,8 +10,10 @@ STANDAARD = set(sys.stdlib_module_names)
 
 # Toegestane getallen: wiskundige en kalenderconstanten die natuurkundig of per definitie vastliggen.
 # 0 en 1 (nul, eenheid, "plus één dag"), 7 (dagen per week), 24 (uur per dag), 60 (minuten), 100 (procent),
-# 3600 (seconden per uur). Al het andere komt uit het instellingenregister.
-TOEGESTAAN = {0, 1, 7, 24, 60, 100, 3600}
+# 3600 (seconden per uur), en eenheidsomrekeningen die natuurkundig vastliggen (§4.3): 1000 (kilo, bijv.
+# kWh ↔ MWh), 1024 (kibi: MiB ↔ bytes) en 1.000.000 (micro/mega, bijv. µmol ↔ mol). Al het andere komt uit
+# het instellingenregister.
+TOEGESTAAN = {0, 1, 7, 24, 60, 100, 3600, 1000, 1024, 1_000_000}
 
 
 def _bestanden(map_: str):
