@@ -1,0 +1,31 @@
+name: Tests en container
+on:
+  push:
+    branches: ['**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Opmaak (ruff format)
+        run: ruff format --check .
+      - name: LibreOffice Calc zonder scherm (voor de pdf-proef)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-calc-nogui
+      - run: pytest -q
+      - run: docker build -t teeltplanning:test .
+      - name: Rooktest container (start als 568, /health)
+        run: |
+          docker run -d --name rooktest -p 8000:8000 teeltplanning:test
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/health && break; sleep 2; done
+          test "$(docker exec rooktest id -u)" = "568"
+          docker rm -f rooktest

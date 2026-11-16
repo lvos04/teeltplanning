@@ -1,0 +1,85 @@
+# Status
+
+Per fase: wat werkt, wat getest is en wat nog niet kan. Echte bedrijfsbestanden zijn tijdens de bouw **niet**
+beschikbaar geweest; alles is gedaan op synthetische werkboeken met dezelfde structuur (`tests/synthetisch.py`).
+
+## Fase 0 — Proeven en vragen (versie 0.1.0)
+
+| Klaar als | Uitkomst |
+|---|---|
+| Repo, CI-skelet, lege app met `/health` | Gedaan. `.github/workflows/check.yml` (ruff lint + format, pytest, docker build + rooktest), `image.yml` (ghcr.io/lvos04/teeltplanning; `ccr-*`/`fase-*` → `<versie>-rc`, `branch-…`, `sha-…`, nooit `latest`; tags `v*` → versie + `latest`), `auto-release.yml` (gelijk aan Gewichtsverwachting, versie uit `teeltplanning/__init__.py`). |
+| Image bouwt en start als gebruiker 568 | Gedaan (lokaal): `docker run` → `/health` geeft `{"status":"ok","versie":"0.1.0"}`, `id -u` = 568, Docker-healthcheck `healthy`. **Imagegrootte: 806 MB** (waarvan het grootste deel LibreOffice Calc zonder scherm + lettertypen; zonder LibreOffice ±200 MB). |
+| Image staat op GHCR | Wacht op de eerste push van een `fase-*`-branch naar GitHub (de workflow publiceert dan `0.1.0-rc`, `branch-fase-0`, `sha-…`). Het GHCR-pakket staat standaard privé: eenmalig op publiek zetten of TrueNAS registry-inloggegevens geven (TRUENAS.md). |
+| Synthetische testwerkboeken met de structuur uit §7 | Gedaan: `python -m tests.synthetisch <map>` maakt `Teeltprogramma maken synthetisch.xlsx` (39 tabbladen, `Ronde 1`…`Ronde 34`, rij 10–11 kop, `C8` titel, rij 12–51 met formules **én** gecachte uitkomst, verwijzingen `='Ronde N'!N12`, 52-weken-rekenwerk, teeltkaart met afdrukbereik `A1:AG31` en streeflengtetabel `AI1:AM41`) en `Belichting winterronde synthetisch.xlsx` (`belichting` rij 2–84 weekuren in vijf celtypen, kaptabel vanaf rij 87, kostenvergelijking AK–AM, `teeltschema` 860 regels, `alar`, `alar tutu`, `data` met 5-minutenreeks over de wintertijdovergang, een gat, een dubbele tijdstempel en regels buiten tijdvolgorde). Aannames over de delen die het bouwplan niet beschrijft: EXCEL.md. |
+| Proef 1 beschreven met uitkomst | **Op synthetisch: geslaagd. Op het echte bestand: wacht op het bestand.** Zie hieronder. |
+| Proef 2 beschreven met uitkomst | **Op synthetisch: geslaagd (LibreOffice). Echt sjabloon in Excel: wacht op het bestand.** Zie hieronder. |
+| Open vragen klaar voor Leon | Gedaan: OPEN_VRAGEN.md (§15, plus ontbrekende documenten en nieuwe vragen). |
+
+### Proef 1 — duurcellen als uren
+
+Code: `proeven/proef1_duurcellen.py`. Normaliseert op **celtype**, niet op getoonde tekst:
+
+| Celtype (openpyxl) | Komt voor bij getalnotatie | Omrekening |
+|---|---|---|
+| `timedelta` | `[h]:mm`, `[h]:mm:ss` | `total_seconds / 3600` |
+| `datetime` | datumnotatie zoals `d "days," hh:mm` | terug naar Excel-getal in het datumstelsel van het werkboek (1900/1904) × 24 — `1900-01-03 10:35` → 3,4410 dagen → 82,583 uur |
+| `time` | `hh:mm` met waarde < 1 dag | dagdeel × 24 (melding: kan geen duur ≥ 24 uur zijn) |
+| getal | `General`, `0.000` | dagen × 24 |
+| tekst | `3 days, 10:35`, `82:35` | alleen gelezen **met melding** "controleer de bron" |
+
+Uitkomst op het synthetische werkboek: alle 2.160 weekcellen (80 modules × 27 weken) komen exact overeen met de
+bij het genereren vastgelegde uren (`tests/test_proef1_duurcellen.py`); `3 days, 10:35` = 82,583 uur; de cel met
+180 uur wordt gemeld als buiten 0–168; de lege cel blijft "onbekend". Steekproef van tien cellen (handmatig
+nagerekend, uitvoer van `python -m proeven.proef1_duurcellen … --steekproef 10`):
+
+```
+cel    module week celtype    getalnotatie          Excel-dagen   uren      uu:mm
+C12    10     37   datetime   d "days," hh:mm           2.045139    49.083   49:05   (2,045139 × 24 = 49,083)
+C61    119    37   time       hh:mm                     0.614583    14.750   14:45
+T71    129    2    timedelta  [h]:mm                    4.104167    98.500   98:30
+E75    133    39   timedelta  [h]:mm                    2.201389    52.833   52:50
+S78    136    1    timedelta  [h]:mm                    2.274306    54.583   54:35
+U16    14     3    timedelta  [h]:mm                    1.173611    28.167   28:10
+K20    18     45   timedelta  [h]:mm                    0.864583    20.750   20:45
+Y22    20     7    getal      0.000                     1.100694    26.417   26:25
+J34    32     44   timedelta  [h]:mm                    4.218750   101.250  101:15
+F41    39     40   getal      0.000                     5.812500   139.500  139:30
+```
+
+**Wat met het echte bestand nog moet:** in de container op de NAS (het bestand blijft op de dataset):
+`python -m proeven.proef1_duurcellen "/data/bron/Belichting winterronde.xlsx" --steekproef 10` en de tien regels
+naast Excel leggen (de cel in Excel op notatie `[u]:mm` zetten en vergelijken). Daarnaast
+`TEELT_ECHT_BELICHTING=<pad> pytest -s tests/test_proef1_duurcellen.py`: faalt als er onbekende celtypen zijn.
+Let op de verdeling over celtypen en de meldingen in de uitvoer.
+
+### Proef 2 — sjabloon vullen
+
+Code: `proeven/proef2_sjabloon.py`. Aanpak: **waarden rechtstreeks in de XML van één werkblad** schrijven
+(bestaande cel: stijlnummer blijft; ontbrekende cel/rij: op volgorde invoegen; tekst als inline-string, zodat de
+gedeelde-tekstentabel niet verandert). Alle andere onderdelen van het pakket blijven byte-voor-byte gelijk;
+alleen `xl/workbook.xml` krijgt `fullCalcOnLoad="1"` en een eventuele `xl/calcChain.xml` wordt verwijderd.
+
+Uitkomst op het synthetische werkboek (rondeblad `B4:R51` en teeltkaart `A1:AG31`):
+
+* pakketvergelijking: alleen `xl/workbook.xml` en het gevulde blad verschillen; niets verdwenen of nieuw;
+* opmaak via openpyxl vergeleken (kolombreedtes, samengevoegde cellen, afdrukbereik, richting, papierformaat,
+  passend op 1×1, marges, vastgezette deelvensters, en per cel lettertype, vulling, rand, uitlijning,
+  getalnotatie, bescherming): **geen verschillen**; gegevensvalidatie en opmerking blijven staan;
+* ter vergelijking: openpyxl laden + opslaan herschrijft `styles.xml`, `docProps/core.xml` en **alle**
+  werkbladen — daarom niet die route;
+* LibreOffice 7.4 (zonder scherm, eigen tijdelijk profiel, tijdslimiet) zet het gevulde blad om naar pdf:
+  rondeblad **1 pagina**, teeltkaart **1 pagina**, ook in de container als gebruiker 568. Bevinding: LibreOffice
+  drukt **verborgen** bladen wél af; voor de pdf wordt daarom een afdrukkopie gemaakt met alleen het af te drukken
+  blad in `workbook.xml` (fase 2 neemt dit over).
+
+**Wat met het echte bestand nog moet:** `TEELT_ECHT_PROGRAMMA=<pad> pytest -s tests/test_proef2_sjabloon.py`
+(vult `Ronde 1`, controleert pakket en opmaak, print het pad van het gevulde bestand) en dat gevulde bestand
+**in Excel openen**: geen herstelmelding, opmaak en afdrukvoorbeeld gelijk aan het origineel. Dit kon hier niet
+(geen Excel, geen echt bestand). Mogelijke verrassingen in het echte werkboek die het synthetische niet heeft:
+gedeelde formules (`<f t="shared">`), matrixformules, afbeeldingen/vormen en externe koppelingen; de vuller laat
+die buiten de gevulde cellen ongemoeid, maar alleen de echte proef bewijst het.
+
+### Tests fase 0
+
+`pytest`: 25 geslaagd, 2 overgeslagen (de twee tests met het echte bestand). `ruff check` en
+`ruff format --check` schoon.

@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest==9.0.2
+ruff==0.14.5
+# TestClient van Starlette
+httpx==0.28.1
+httpcore==1.0.9
+certifi==2026.10.23
