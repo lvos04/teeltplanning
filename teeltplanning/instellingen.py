@@ -1,0 +1,503 @@
+"""Het instellingenregister (BOUWPLAN §4.3): één plek voor alle rekenwaarden, drempels, lijsten en regels.
+
+Elke instelling heeft een sleutel, groep, label, uitleg in gewone taal, type, eenheid, startwaarde, toegestane
+grenzen of keuzes en of `null` ("onbekend") is toegestaan. De waarden hieronder zijn uitsluitend
+**startwaarden** bij een schone installatie; de beheerder wijzigt ze in Beheer → Instellingen. Een startwaarde
+is alleen ingevuld als het bouwplan hem noemt; anders `None` met een verwijzing naar docs/OPEN_VRAGEN.md.
+
+Opslag: tabel `instelling` (één regel per wijziging, met optionele ingangsdatum). De rekenkern krijgt de
+waarden als parameter (`teeltplanning.planning`); `kern/` leest zelf nooit uit de database.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+TYPEN = ("geheel", "getal", "tekst", "bool", "keuze", "weekdagen", "weekbereik", "lijst", "tabel", "toewijzing")
+WEEKDAGEN = {1: "ma", 2: "di", 3: "wo", 4: "do", 5: "vr", 6: "za", 7: "zo"}
+
+
+@dataclass(frozen=True)
+class Kolom:
+    naam: str
+    type: str  # geheel | getal | tekst | datum
+    label: str
+    null: bool = False
+    min: float | None = None
+    max: float | None = None
+
+
+@dataclass(frozen=True)
+class Instelling:
+    sleutel: str
+    groep: str
+    label: str
+    uitleg: str
+    type: str
+    startwaarde: Any = None
+    eenheid: str | None = None
+    min: float | None = None
+    max: float | None = None
+    keuzes: tuple = ()
+    null: bool = False
+    met_ingangsdatum: bool = False
+    geheim: bool = False
+    kolommen: tuple[Kolom, ...] = ()  # voor type tabel
+    vraag: str | None = None  # verwijzing naar docs/OPEN_VRAGEN.md
+    fase: int = 1  # vanaf welke fase de app hem gebruikt
+
+    def __post_init__(self):
+        assert self.type in TYPEN, self.type
+
+
+GROEPEN = (
+    "Bedrijf", "Kalender", "Datumketen", "Licht", "Lampen", "Gewas", "Voorstellen", "Model", "Energie", "Afzet",
+    "Zoeken", "Teeltkaart", "Afdrukken", "Import", "Bronnen", "Koppeling", "Beveiliging", "Systeem",
+)  # fmt: skip
+
+_STREEFLENGTE = [
+    (4, None, None, 30, None), (7, 45, 39, 35, 39), (8, 48, 42, 40, 42), (9, 51, 45, 42, 45), (10, 54, 48, 44, 48),
+    (11, 56, 51, 46, 51), (12, 58, 56, 48, 56), (13, 60, 58, 50, 58), (14, 62, 60, 52, 60), (15, 64, 62, 54, 62),
+    (16, 66, 64, 56, 64), (17, 68, 66, 58, 66), (18, 69, 67, 60, 67), (19, 70, 68, 62, 68), (20, 71, 69, 63, 69),
+    (21, 72, 70, 65, 70), (22, 73, 71, 67, 71), (23, 74, 72, 69, 72), (24, 75, 73, 71, 73), (25, 76, 74, 73, 74),
+    (26, 77, 75, 75, 75), (27, 77, 76, 77, 76), (28, 78, 77, 78, 77), (29, 78, 78, 79, 78), (30, 79, 78, 80, 78),
+    (31, 79, 79, 80, 79), (32, 80, 79, 80, 79), (33, 80, 80, 80, 80), (34, 80, 80, 80, 80), (35, 80, 80, 80, 80),
+]  # fmt: skip
+STREEFLENGTE_START = [
+    dict(zip(("ld_dag", "winter", "voorjaar", "zomer", "najaar"), r, strict=True)) for r in _STREEFLENGTE
+]
+
+KOLOMMEN_RONDEBLAD = {
+    "vakgroep": "B", "volgnummer": "C", "schema": "D", "plant_week": "E", "plant_dag": "F", "ld_dagen": "G",
+    "licht_uit_week": "H", "licht_uit_dag": "I", "reactietijd": "J", "tussenlicht": "K", "verlenging": "L",
+    "dichtheid": "M", "bloei_week": "N", "bloei_dag": "O", "teeltduur": "P", "teeltverlenging": "R",
+    "gewicht": "T", "geoogst": "V", "gemiddeld_gewicht": "X", "uitval": "Y", "geplant": "Z", "oogstaantal": "AB",
+    "maand": "AD", "cumulatief": "AF",
+}  # fmt: skip
+KOPPEN_RONDEBLAD = {"D10": "schema", "E10": "pl datum", "H10": "licht uit", "N10": "bloei", "C11": "vak", "E11": "w/d"}
+
+I = Instelling  # noqa: E741 - korte naam voor de lijst hieronder
+REGISTER_LIJST: list[Instelling] = [
+    # --- Bedrijf -----------------------------------------------------------------------------------------
+    I("bedrijf.naam", "Bedrijf", "Bedrijfsnaam", "Naam van het bedrijf, voor afdrukken en de koppeling.", "tekst", null=True, max=200),
+    I("bedrijf.aantal_kappen", "Bedrijf", "Aantal kappen", "Aantal kappen in de kas.", "geheel", 40, min=1, max=500),
+    I("bedrijf.oppervlak_per_kap_m2", "Bedrijf", "Oppervlak per kap",
+      "Teeltoppervlak van één kap. Nodig voor geplant aantal (dichtheid × oppervlak) en oogstaantal. Het werkboek "
+      "rekent met 726 m² (rondeblad) én 750 m² (kostenblok); welke klopt is nog niet bevestigd. Per kap kan in "
+      "Beheer → Kappen een eigen oppervlak worden ingevuld.", "getal", None, "m²", min=1, max=100000, null=True,
+      met_ingangsdatum=True, vraag="4"),
+    I("bedrijf.bedden_per_kap", "Bedrijf", "Bedden per kap", "Aantal bedden per kap (voor gemengde kappen zoals 3a3p).", "geheel", 6, min=1, max=50),
+    I("bedrijf.breedtegraad", "Bedrijf", "Breedtegraad", "Breedtegraad van de kas (daglengte, fase 3).", "getal", None, "°", min=-66, max=66, null=True, fase=3),
+    I("bedrijf.knmi_station", "Bedrijf", "KNMI-station", "Dichtstbijzijnde KNMI-station (fase 3).", "tekst", None, null=True, max=50, fase=3),
+    # --- Kalender ----------------------------------------------------------------------------------------
+    I("kalender.plantdagen", "Kalender", "Toegestane plantdagen",
+      "Weekdagen waarop geplant mag worden. Het plantdatumvoorstel wordt afgerond naar de eerstvolgende toegestane "
+      "dag.", "weekdagen", [1, 2, 3, 4, 5, 6], vraag="8"),
+    I("kalender.oogstdagen", "Kalender", "Toegestane oogstdagen", "Weekdagen waarop geoogst mag worden (fase 5). Leeg = onbekend.", "weekdagen", None, null=True, fase=5),
+    I("kalender.wisseltijd_dagen", "Kalender", "Wisseltijd per kap",
+      "Dagen tussen oogst en de volgende planting in dezelfde kap. Per kap kan een eigen waarde worden ingevuld "
+      "in Beheer → Kappen.", "geheel", 0, "dagen", min=0, max=120, vraag="8"),
+    I("kalender.blokkadeperioden", "Kalender", "Blokkadeperioden",
+      "Perioden waarin niet geplant mag worden, bijvoorbeeld stomen. Kap leeg = alle kappen.", "tabel", [],
+      kolommen=(Kolom("van", "datum", "van"), Kolom("tot", "datum", "tot en met"), Kolom("kap", "geheel", "kap", null=True, min=1, max=500),
+                Kolom("reden", "tekst", "reden", null=True))),
+    I("kalender.weergave", "Kalender", "Weergave week-dag", "Hoe datums op het scherm staan: 44-6 of 44-6 (2026).", "keuze", "week-dag", keuzes=("week-dag", "week-dag-jaar")),
+    # --- Datumketen --------------------------------------------------------------------------------------
+    I("keten.licht_aan_na_licht_uit_dagen", "Datumketen", "Dagen van licht uit tot licht aan",
+      "Licht aan (tussenlicht) = licht uit + dit aantal dagen (uit de teeltkaart).", "geheel", 12, "dagen", min=0, max=120),
+    I("keten.plantdatum_volgt_keten", "Datumketen", "Plantdatum volgt de keten",
+      "Aan: het voorstel voor de plantdatum is de oogst van de vorige teelt in dezelfde kap + wisseltijd, "
+      "afgerond naar een toegestane plantdag.", "bool", True),
+    I("keten.ld_dagen_min", "Datumketen", "LD-dagen minimaal", "Ondergrens voor dagen vegetatief; daarbuiten een fout op de rij.", "geheel", 0, "dagen", min=0, max=365),
+    I("keten.ld_dagen_max", "Datumketen", "LD-dagen maximaal", "Bovengrens voor dagen vegetatief.", "geheel", 365, "dagen", min=0, max=365),
+    I("keten.reactietijd_min", "Datumketen", "Reactietijd minimaal", "Ondergrens voor de reactietijd.", "geheel", 0, "dagen", min=0, max=365),
+    I("keten.reactietijd_max", "Datumketen", "Reactietijd maximaal", "Bovengrens voor de reactietijd.", "geheel", 365, "dagen", min=0, max=365),
+    I("keten.verlenging_min", "Datumketen", "Verlenging minimaal", "Ondergrens voor de verlenging (werkboek: 0–2).", "geheel", 0, "dagen", min=0, max=60),
+    I("keten.verlenging_max", "Datumketen", "Verlenging maximaal", "Bovengrens voor de verlenging (werkboek: 0–2).", "geheel", 2, "dagen", min=0, max=60),
+    I("keten.overlap", "Datumketen", "Gedrag bij overlap",
+      "Plantdatum vóór de oogst van de vorige teelt in dezelfde kap: alleen waarschuwen, of het opslaan blokkeren.",
+      "keuze", "waarschuwen", keuzes=("waarschuwen", "blokkeren")),
+    # --- Licht (fase 3) ----------------------------------------------------------------------------------
+    I("licht.straling_naar_par", "Licht", "Omrekenfactor straling → PAR", "par [mol/m²/dag] = straling [J/cm²/dag] × deze factor × transmissie.", "getal", 0.023, min=0, max=1, fase=3),
+    I("licht.transmissie", "Licht", "Kastransmissie", "Fractie van het buitenlicht die binnenkomt.", "getal", None, min=0, max=1, null=True, met_ingangsdatum=True, vraag="6", fase=3),
+    I("licht.minimale_daglichtsom", "Licht", "Minimale daglichtsom", "Ondergrens voor de daglichtsom.", "getal", None, "mol/m²/dag", min=0, max=100, null=True, fase=3),
+    I("licht.bron_toekomstige_branduren", "Licht", "Bron voor toekomstige branduren", "Waarmee branduren in de toekomst worden geschat.", "keuze", "historisch_gemiddelde",
+      keuzes=("historisch_gemiddelde", "regel", "handmatig"), fase=3),
+    # --- Gewas -------------------------------------------------------------------------------------------
+    I("gewas.uitval_per_oogstweek", "Gewas", "Uitval per oogstweek",
+      "Uitvalfractie per ISO-oogstweek; levert het uitvalvoorstel. Komt uit het blad 'productie cijfers' van het "
+      "werkboek; tot die is ingevuld is het uitvalvoorstel onbekend.", "tabel", [],
+      kolommen=(Kolom("week_van", "geheel", "week van", min=1, max=53), Kolom("week_tot", "geheel", "week t/m", min=1, max=53),
+                Kolom("fractie", "getal", "fractie", min=0, max=1)), vraag="B5"),
+    I("gewas.dichtheid_min", "Gewas", "Dichtheid minimaal", "Ondergrens planten per m²; daarbuiten een fout op de rij. Leeg = geen grens.", "getal", None, "planten/m²", min=0, max=1000, null=True),
+    I("gewas.dichtheid_max", "Gewas", "Dichtheid maximaal", "Bovengrens planten per m². Leeg = geen grens.", "getal", None, "planten/m²", min=0, max=1000, null=True),
+    I("gewas.reactietijd_aftrek_1", "Gewas", "Reactietijd: eerste aftrek", "Reactietijd = teeltduur korte dag − deze aftrek − tweede aftrek (teeltschema).", "geheel", 2, "dagen", min=0, max=30, fase=4),
+    I("gewas.reactietijd_aftrek_2", "Gewas", "Reactietijd: tweede aftrek", "Zie eerste aftrek.", "geheel", 3, "dagen", min=0, max=30, fase=4),
+    I("gewas.min_waarnemingen_lbe", "Gewas", "Minimum waarnemingen per LBE-cel", "Minder waarnemingen = terugval op het seizoensgemiddelde (fase 3).", "geheel", None, min=1, max=1000, null=True, fase=3),
+    # --- Voorstellen / Model -----------------------------------------------------------------------------
+    I("voorstel.seizoensvenster_weken", "Voorstellen", "Venster seizoensbasis", "Plantweken rond de eigen plantweek voor de seizoensbasis (±).", "geheel", 2, "weken", min=0, max=26, fase=4),
+    I("voorstel.terugkijk_jaren", "Voorstellen", "Terugkijkperiode", "Aantal jaren historie voor voorstellen.", "geheel", None, "jaar", min=1, max=50, null=True, fase=4),
+    I("voorstel.temperatuurcorrectie", "Voorstellen", "Temperatuurcorrectie reactietijd", "Standaard uit tot er temperatuurdata en een gekalibreerde gevoeligheid zijn.", "bool", False, fase=4),
+    I("voorstel.referentietemperatuur", "Voorstellen", "Referentietemperatuur", "Voor de temperatuurcorrectie.", "getal", None, "°C", min=-10, max=40, null=True, fase=4),
+    I("model.drempel_gevalideerd", "Model", "Drempel voor 'gevalideerd'", "Hoeveel beter dan de seizoensbasis een model in de backtest moet zijn.", "getal", None, min=0, max=1000, null=True, fase=4),
+    # --- Energie / Afzet / Zoeken ------------------------------------------------------------------------
+    I("energie.stroomprijs_eur_per_mwh", "Energie", "Stroomprijs voor de planning", "Het werkboek rekent met 80 en met 300 €/MWh.", "getal", None, "€/MWh", min=0, max=10000, null=True,
+      met_ingangsdatum=True, vraag="10", fase=3),
+    I("afzet.landen", "Afzet", "Landen voor officiële feestdagen", "Landcodes voor het pakket holidays.", "lijst", ["NL", "BE", "DE", "GB", "FR", "PL", "IT", "ES"], fase=5),
+    I("zoeken.max_rekentijd_s", "Zoeken", "Maximale rekentijd zoekfunctie", "Hoe lang de zoekfunctie mag rekenen.", "getal", None, "s", min=1, max=3600, null=True, fase=5),
+    # --- Teeltkaart (fase 2) -----------------------------------------------------------------------------
+    I("teeltkaart.streeflengte", "Teeltkaart", "Streeflengtetabel", "Streeflengte in cm per LD-dag en seizoen (uit het werkboek, §9.2). Leeg = geen waarde op de kaart.", "tabel",
+      STREEFLENGTE_START, kolommen=(Kolom("ld_dag", "geheel", "LD-dag", min=0, max=100),) + tuple(Kolom(s, "geheel", s, null=True, min=0, max=500)
+                                     for s in ("winter", "voorjaar", "zomer", "najaar")), fase=2),
+    I("teeltkaart.seizoen_winter", "Teeltkaart", "Seizoen winter (plantweken)", "Plantweken die bij winter horen.", "weekbereik", "43-52", fase=2),
+    I("teeltkaart.seizoen_voorjaar", "Teeltkaart", "Seizoen voorjaar (plantweken)", "Plantweken die bij voorjaar horen.", "weekbereik", "1-6", fase=2),
+    I("teeltkaart.seizoen_zomer", "Teeltkaart", "Seizoen zomer (plantweken)", "Plantweken die bij zomer horen.", "weekbereik", "7-36", fase=2),
+    I("teeltkaart.seizoen_najaar", "Teeltkaart", "Seizoen najaar (plantweken)", "Plantweken die bij najaar horen.", "weekbereik", "37-42", fase=2),
+    I("teeltkaart.meetdagen", "Teeltkaart", "Weekdagen van de meetmomenten", "Weekdagen van de meetmomenten op de kaart.", "weekdagen", [1, 3, 5], fase=2),
+    I("teeltkaart.aantal_momenten", "Teeltkaart", "Aantal meetmomenten", "Aantal regels in de tabel op de kaart.", "geheel", 16, min=1, max=60, fase=2),
+    I("teeltkaart.offset_remstof", "Teeltkaart", "Dag-offset remstof", "Dagen na licht uit.", "geheel", None, "dagen", min=-60, max=120, null=True, fase=2),
+    I("teeltkaart.offset_slak", "Teeltkaart", "Dag-offset slak", "Dagen na licht uit.", "geheel", None, "dagen", min=-60, max=120, null=True, fase=2),
+    I("teeltkaart.offset_pluizen", "Teeltkaart", "Dag-offset pluizen", "Dagen na licht uit.", "geheel", None, "dagen", min=-60, max=120, null=True, fase=2),
+    I("teeltkaart.offset_netten", "Teeltkaart", "Dag-offset netten", "Dagen na licht uit.", "geheel", None, "dagen", min=-60, max=120, null=True, fase=2),
+    # --- Afdrukken (fase 2) ------------------------------------------------------------------------------
+    I("afdrukken.standaard", "Afdrukken", "Standaard afdrukvorm", "Pdf of Excel als standaard.", "keuze", None, keuzes=("pdf", "excel"), null=True, fase=2),
+    I("afdrukken.tijdslimiet_s", "Afdrukken", "Tijdslimiet pdf-conversie", "Maximale duur van één LibreOffice-conversie.", "geheel", None, "s", min=5, max=600, null=True, fase=2),
+    # --- Import ------------------------------------------------------------------------------------------
+    I("import.max_upload_mb", "Import", "Maximale uploadgrootte", "Grootste toegestane werkboek.", "geheel", 32, "MiB", min=1, max=256),
+    I("import.max_uitgepakt_mb", "Import", "Maximale uitgepakte grootte", "Grootste toegestane uitgepakte inhoud van een werkboek.", "geheel", 512, "MiB", min=1, max=2048),
+    I("import.rondeblad_eerste_rij", "Import", "Rondeblad: eerste regel", "Eerste regel met een kap.", "geheel", 12, min=1, max=1000),
+    I("import.rondeblad_laatste_rij", "Import", "Rondeblad: laatste regel", "Laatste regel met een kap.", "geheel", 51, min=1, max=1000),
+    I("import.rondeblad_titelcel", "Import", "Rondeblad: titelcel", "Cel met de rondenaam.", "tekst", "C8", max=10),
+    I("import.rondeblad_kolommen", "Import", "Rondeblad: kolomtoewijzing", "Kolomletter per veld. Verplaatst Leon een kolom, pas hem hier aan.", "toewijzing", KOLOMMEN_RONDEBLAD),
+    I("import.rondeblad_koppen", "Import", "Rondeblad: herkenningskoppen", "Cel → verwachte tekst (hoofdletters en spaties tellen niet).", "toewijzing", KOPPEN_RONDEBLAD, vraag="B7"),
+    I("import.plantdatum_bij_verwijzing", "Import", "Plantdatum bij verwijzing naar vorige ronde",
+      "Als de plantweek een formule is die naar de vorige ronde verwijst: 'keten' = de plantdatum volgt de keten "
+      "(voorstel), 'vastzetten' = de waarde uit het werkboek wordt als handmatige waarde vastgezet.", "keuze", "keten",
+      keuzes=("keten", "vastzetten"), vraag="B4"),
+    I("import.weekuren_min", "Import", "Weekuren minimaal", "Controlegrens bij het importeren van weekuren.", "getal", 0, "uur", min=0, max=168, fase=3),
+    I("import.weekuren_max", "Import", "Weekuren maximaal", "Controlegrens bij het importeren van weekuren.", "getal", 168, "uur", min=0, max=168, fase=3),
+    I("import.koppel_tolerantie_dagen", "Import", "Tolerantie koppelen op plantdatum", "± dagen bij koppelen van realisatie op kap + plantdatum.", "geheel", None, "dagen", min=0, max=30, null=True, fase=6),
+    # --- Bronnen (alle standaard uit) --------------------------------------------------------------------
+    I("bronnen.knmi_aan", "Bronnen", "KNMI Data Platform", "Gemeten straling en temperatuur ophalen.", "bool", False, fase=3),
+    I("bronnen.open_meteo_aan", "Bronnen", "Open-Meteo", "Let op: de gratis API is voor niet-commercieel gebruik.", "bool", False, fase=3),
+    I("bronnen.energyzero_aan", "Bronnen", "EnergyZero", "Dagvooruitprijzen stroom.", "bool", False, fase=3),
+    # --- Koppeling (fase 6) ------------------------------------------------------------------------------
+    I("koppeling.ingeschakeld", "Koppeling", "Bedrijfskoppeling ingeschakeld",
+      "Bedrijfskoppeling API v1 aanbieden. Uit = alle koppelroutes geven 403 koppeling_uitgeschakeld (vanaf fase 6).", "bool", False),
+    I("koppeling.verzoeken_per_minuut", "Koppeling", "Verzoeken per minuut per sleutel", "Limiet van het contract.", "geheel", 120, min=1, max=10000, fase=6),
+    # --- Beveiliging (zoals Gewichtsverwachting) ---------------------------------------------------------
+    I("beveiliging.sessie_uren", "Beveiliging", "Sessieduur", "Hoe lang een aanmelding geldig blijft.", "geheel", 12, "uur", min=1, max=168),
+    I("beveiliging.inlogpogingen_account", "Beveiliging", "Maximale inlogpogingen per account", "Binnen het venster.", "geheel", 5, min=3, max=50),
+    I("beveiliging.inlogpogingen_ip", "Beveiliging", "Maximale inlogpogingen per IP-adres",
+      "Ruimer dan per account, zodat één persoon achter een gedeeld adres niet iedereen blokkeert. 0 = zelfde als per account.", "geheel", 25, min=0, max=1000),
+    I("beveiliging.venster_minuten", "Beveiliging", "Venster aanmeldpogingen", "Periode waarover mislukte pogingen tellen.", "geheel", 15, "minuten", min=1, max=1440),
+    I("beveiliging.vertraging_max_s", "Beveiliging", "Maximale vertraging na fout", "Oplopende vertraging (0,25 s per eerdere fout).", "getal", 1.0, "s", min=0, max=10),
+    I("beveiliging.vertrouwde_proxys", "Beveiliging", "Vertrouwde proxy's",
+      "IP-adressen of netwerken (CIDR), komma-gescheiden, waarvan X-Forwarded-For wordt vertrouwd. Leeg = "
+      "omgevingsvariabele TRUSTED_PROXIES. Nooit 0.0.0.0/0.", "tekst", "", max=1000),
+    I("beveiliging.strikte_oorsprong", "Beveiliging", "Strikte oorsprongcontrole", "Schrijfverzoeken zonder Origin of Referer van dezelfde host weigeren.", "bool", True),
+    I("beveiliging.mfa_verplicht_beheerders", "Beveiliging", "MFA verplicht voor beheerders", "Beheerders zonder tweestapsverificatie krijgen geen beheerrechten.", "bool", False),
+    I("beveiliging.audit_bewaardagen", "Beveiliging", "Bewaartermijn auditlog", "0 = onbeperkt bewaren.", "geheel", 0, "dagen", min=0, max=36500),
+    # --- Systeem -----------------------------------------------------------------------------------------
+    I("systeem.backup_interval_uren", "Systeem", "Back-upinterval", "Automatische lokale back-up.", "geheel", 24, "uur", min=1, max=168),
+    I("systeem.backup_bewaardagen", "Systeem", "Bewaartermijn back-ups", "0 = onbeperkt (advies: 30).", "geheel", 0, "dagen", min=0, max=3650),
+    I("systeem.tijdzone", "Systeem", "Tijdzone", "Tijdzone voor weergave.", "keuze", "Europe/Amsterdam", keuzes=("Europe/Amsterdam",)),
+    I("systeem.getalnotatie", "Systeem", "Getalnotatie", "Decimaalteken op het scherm.", "keuze", "nl", keuzes=("nl", "en")),
+    I("systeem.hostnaam", "Systeem", "Hostnaam", "Hostnaam voor veilige cookies (informatief; SECURE_COOKIES staat in TrueNAS).", "tekst", None, null=True, max=200),
+]  # fmt: skip
+del I
+REGISTER: dict[str, Instelling] = {i.sleutel: i for i in REGISTER_LIJST}
+assert len(REGISTER) == len(REGISTER_LIJST), "dubbele sleutel in het register"
+
+
+class OngeldigeWaarde(ValueError):
+    pass
+
+
+def _getal(waarde: Any, inst_naam: str, geheel: bool, minimum, maximum) -> float | int:
+    if isinstance(waarde, bool):
+        raise OngeldigeWaarde(f"{inst_naam}: verwacht een getal.")
+    if isinstance(waarde, str):
+        tekst = waarde.strip().replace(",", ".")
+        try:
+            waarde = float(tekst)
+        except ValueError as exc:
+            raise OngeldigeWaarde(f"{inst_naam}: '{waarde}' is geen getal.") from exc
+    if not isinstance(waarde, (int, float)) or waarde != waarde or waarde in (float("inf"), float("-inf")):
+        raise OngeldigeWaarde(f"{inst_naam}: verwacht een getal.")
+    if geheel:
+        if float(waarde) != int(waarde):
+            raise OngeldigeWaarde(f"{inst_naam}: verwacht een geheel getal.")
+        waarde = int(waarde)
+    if minimum is not None and waarde < minimum:
+        raise OngeldigeWaarde(f"{inst_naam}: minimaal {minimum}.")
+    if maximum is not None and waarde > maximum:
+        raise OngeldigeWaarde(f"{inst_naam}: maximaal {maximum}.")
+    return waarde
+
+
+def _weekbereik(tekst: str) -> tuple[int, int]:
+    try:
+        van, tot = (int(x) for x in str(tekst).split("-"))
+    except ValueError as exc:
+        raise OngeldigeWaarde("Gebruik week van-tot, bijvoorbeeld 43-52.") from exc
+    if not (1 <= van <= 53 and 1 <= tot <= 53):
+        raise OngeldigeWaarde("Weken lopen van 1 t/m 53.")
+    return van, tot
+
+
+def _kolomwaarde(kolom: Kolom, waarde: Any) -> Any:
+    if waarde is None or (isinstance(waarde, str) and not waarde.strip()):
+        if not kolom.null:
+            raise OngeldigeWaarde(f"Kolom '{kolom.label}' is verplicht.")
+        return None
+    if kolom.type in ("geheel", "getal"):
+        return _getal(waarde, kolom.label, kolom.type == "geheel", kolom.min, kolom.max)
+    if kolom.type == "datum":
+        try:
+            return date.fromisoformat(str(waarde).strip()).isoformat()
+        except ValueError as exc:
+            raise OngeldigeWaarde(f"Kolom '{kolom.label}': gebruik JJJJ-MM-DD.") from exc
+    return str(waarde).strip()[:500]
+
+
+def valideer(inst: Instelling, waarde: Any) -> Any:
+    """Controleer en normaliseer een waarde. `OngeldigeWaarde` met een begrijpelijke melding bij fouten."""
+    leeg = waarde is None or (isinstance(waarde, str) and not waarde.strip() and inst.type not in ("tekst",))
+    if leeg or (inst.type == "tekst" and waarde is None):
+        if not inst.null:
+            raise OngeldigeWaarde(f"{inst.label}: een waarde is verplicht.")
+        return None
+    t = inst.type
+    if t in ("geheel", "getal"):
+        return _getal(waarde, inst.label, t == "geheel", inst.min, inst.max)
+    if t == "tekst":
+        tekst = str(waarde).strip()
+        if inst.max is not None and len(tekst) > inst.max:
+            raise OngeldigeWaarde(f"{inst.label}: maximaal {int(inst.max)} tekens.")
+        if not tekst and inst.null:
+            return None if inst.startwaarde is None else ""
+        return tekst
+    if t == "bool":
+        if isinstance(waarde, bool):
+            return waarde
+        if str(waarde).lower() in ("1", "true", "aan", "ja", "on"):
+            return True
+        if str(waarde).lower() in ("0", "false", "uit", "nee", "off"):
+            return False
+        raise OngeldigeWaarde(f"{inst.label}: kies aan of uit.")
+    if t == "keuze":
+        if waarde not in inst.keuzes:
+            raise OngeldigeWaarde(f"{inst.label}: kies uit {', '.join(map(str, inst.keuzes))}.")
+        return waarde
+    if t == "weekdagen":
+        if isinstance(waarde, str):
+            waarde = [x for x in waarde.replace(";", ",").split(",") if x.strip()]
+        dagen = sorted({int(_getal(x, inst.label, True, 1, 7)) for x in waarde})
+        if not dagen and not inst.null:
+            raise OngeldigeWaarde(f"{inst.label}: kies minstens één dag.")
+        return dagen
+    if t == "weekbereik":
+        van, tot = _weekbereik(waarde)
+        return f"{van}-{tot}"
+    if t == "lijst":
+        if isinstance(waarde, str):
+            waarde = [x.strip() for x in waarde.replace(";", ",").split(",")]
+        return [str(x).strip()[:100] for x in waarde if str(x).strip()]
+    if t == "toewijzing":
+        if isinstance(waarde, str):
+            try:
+                waarde = json.loads(waarde)
+            except json.JSONDecodeError as exc:
+                raise OngeldigeWaarde(f"{inst.label}: ongeldige JSON.") from exc
+        if not isinstance(waarde, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in waarde.items()
+        ):
+            raise OngeldigeWaarde(f"{inst.label}: verwacht paren tekst → tekst.")
+        if (
+            isinstance(inst.startwaarde, dict)
+            and set(waarde) != set(inst.startwaarde)
+            and inst.sleutel.endswith("kolommen")
+        ):
+            raise OngeldigeWaarde(f"{inst.label}: alle velden moeten een kolom hebben ({', '.join(inst.startwaarde)}).")
+        return {k.strip(): v.strip() for k, v in waarde.items()}
+    if t == "tabel":
+        if isinstance(waarde, str):
+            waarde = csv_naar_tabel(inst, waarde)
+        if not isinstance(waarde, list):
+            raise OngeldigeWaarde(f"{inst.label}: verwacht een tabel.")
+        rijen = []
+        for nummer, rij in enumerate(waarde, 1):
+            if not isinstance(rij, dict):
+                raise OngeldigeWaarde(f"{inst.label}: regel {nummer} is geen rij.")
+            try:
+                rijen.append({k.naam: _kolomwaarde(k, rij.get(k.naam)) for k in inst.kolommen})
+            except OngeldigeWaarde as exc:
+                raise OngeldigeWaarde(f"{inst.label}, regel {nummer}: {exc}") from exc
+        return rijen
+    raise OngeldigeWaarde(f"Onbekend type {t}")  # pragma: no cover
+
+
+def csv_naar_tabel(inst: Instelling, tekst: str) -> list[dict]:
+    """Puntkomma-gescheiden tekst met een kopregel (kolomnamen) → lijst van rijen."""
+    regels = [r for r in tekst.strip().splitlines() if r.strip()]
+    if not regels:
+        return []
+    kop = [k.strip() for k in regels[0].split(";")]
+    namen = {k.naam for k in inst.kolommen}
+    if set(kop) != namen:
+        raise OngeldigeWaarde(f"{inst.label}: kopregel moet zijn: {';'.join(k.naam for k in inst.kolommen)}")
+    return [dict(zip(kop, (v.strip() for v in r.split(";")), strict=False)) for r in regels[1:]]
+
+
+def tabel_naar_csv(inst: Instelling, rijen: list[dict] | None) -> str:
+    namen = [k.naam for k in inst.kolommen]
+    uit = [";".join(namen)]
+    for rij in rijen or []:
+        uit.append(";".join("" if rij.get(n) is None else str(rij.get(n)) for n in namen))
+    return "\n".join(uit)
+
+
+def weergave(inst: Instelling, waarde: Any) -> str:
+    if waarde is None:
+        return "onbekend"
+    if inst.type == "bool":
+        return "aan" if waarde else "uit"
+    if inst.type == "weekdagen":
+        return ", ".join(WEEKDAGEN[d] for d in waarde) or "geen"
+    if inst.type == "lijst":
+        return ", ".join(waarde)
+    if inst.type == "tabel":
+        return f"{len(waarde)} regel(s)"
+    if inst.type == "toewijzing":
+        return ", ".join(f"{k}={v}" for k, v in waarde.items())
+    if isinstance(waarde, float):
+        return f"{waarde:g}".replace(".", ",")
+    return str(waarde)
+
+
+# --- Opslag en opvragen ------------------------------------------------------------------------------------
+def _nu() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+@dataclass
+class Snapshot:
+    """Alle instellingen zoals ze nu gelden, plus de reeksen met ingangsdatum."""
+
+    waarden: dict[str, Any] = field(default_factory=dict)
+    reeksen: dict[str, list[tuple[date | None, Any]]] = field(default_factory=dict)
+
+    def __getitem__(self, sleutel: str) -> Any:
+        if sleutel not in REGISTER:
+            raise KeyError(f"Onbekende instelling {sleutel}")
+        return self.waarden[sleutel]
+
+    def reeks(self, sleutel: str) -> list[tuple[date | None, Any]]:
+        return self.reeksen.get(sleutel, [(None, REGISTER[sleutel].startwaarde)])
+
+    def op(self, sleutel: str, datum: date | None) -> Any:
+        gekozen = REGISTER[sleutel].startwaarde
+        for vanaf, waarde in self.reeks(sleutel):
+            if vanaf is None or (datum is not None and vanaf <= datum):
+                gekozen = waarde
+        return gekozen
+
+
+def laad(db: Session, vandaag: date | None = None) -> Snapshot:
+    from .db.modellen import Instelling as Rij
+
+    vandaag = vandaag or date.today()
+    snap = Snapshot()
+    rijen = db.scalars(select(Rij).order_by(Rij.id)).all()
+    per_sleutel: dict[str, list] = {}
+    for rij in rijen:
+        if rij.sleutel in REGISTER:
+            per_sleutel.setdefault(rij.sleutel, []).append(rij)
+    for sleutel, inst in REGISTER.items():
+        rijen_s = per_sleutel.get(sleutel, [])
+        if inst.met_ingangsdatum:
+            # Per ingangsdatum geldt de laatst opgeslagen waarde.
+            per_datum: dict[date | None, Any] = {None: inst.startwaarde}
+            for rij in rijen_s:
+                per_datum[rij.geldig_vanaf] = inst.startwaarde if rij.is_startwaarde else rij.waarde
+            reeks = sorted(per_datum.items(), key=lambda x: (x[0] is not None, x[0] or date.min))
+            snap.reeksen[sleutel] = reeks
+            snap.waarden[sleutel] = None
+            snap.waarden[sleutel] = snap.op(sleutel, vandaag)
+        else:
+            laatste = rijen_s[-1] if rijen_s else None
+            snap.waarden[sleutel] = inst.startwaarde if laatste is None or laatste.is_startwaarde else laatste.waarde
+    return snap
+
+
+def wijzig(db: Session, gebruiker, sleutel: str, waarde: Any, reden: str | None = None,
+           geldig_vanaf: date | None = None, naar_start: bool = False) -> Any:  # fmt: skip
+    """Sla een nieuwe waarde op (gevalideerd), schrijf het auditlog en markeer het plan als gewijzigd."""
+    from .auth import audit
+    from .db.modellen import Instelling as Rij
+
+    if sleutel not in REGISTER:
+        raise OngeldigeWaarde("Onbekende instelling.")
+    inst = REGISTER[sleutel]
+    if geldig_vanaf is not None and not inst.met_ingangsdatum:
+        raise OngeldigeWaarde(f"{inst.label} heeft geen ingangsdatum.")
+    if inst.geheim:
+        raise OngeldigeWaarde("Geheime waarden worden niet via het register gewijzigd.")
+    nieuw = inst.startwaarde if naar_start else valideer(inst, waarde)
+    oud = laad(db).op(sleutel, geldig_vanaf) if inst.met_ingangsdatum else laad(db)[sleutel]
+    db.add(Rij(sleutel=sleutel, waarde=nieuw, is_startwaarde=naar_start, geldig_vanaf=geldig_vanaf,
+               gewijzigd_door=gebruiker.id if gebruiker else None, reden=(reden or "").strip()[:2000] or None))  # fmt: skip
+    audit(db, gebruiker, "instelling_gewijzigd", f"instelling:{sleutel}",
+          {"oud": oud, "nieuw": nieuw, "geldig_vanaf": geldig_vanaf.isoformat() if geldig_vanaf else None,
+           "naar_startwaarde": naar_start, "reden": reden})  # fmt: skip
+    return nieuw
+
+
+def exporteer(db: Session) -> dict:
+    """Alle instellingen als JSON-document (zonder geheimen)."""
+    snap = laad(db)
+    uit: dict[str, Any] = {"formaat": "teeltplanning-instellingen", "versie": 1, "instellingen": {}}
+    for sleutel, inst in REGISTER.items():
+        if inst.geheim:
+            continue
+        if inst.met_ingangsdatum:
+            uit["instellingen"][sleutel] = {
+                "reeks": [{"geldig_vanaf": d.isoformat() if d else None, "waarde": w} for d, w in snap.reeks(sleutel)]
+            }
+        else:
+            uit["instellingen"][sleutel] = {"waarde": snap[sleutel]}
+    return uit
+
+
+def importeer(db: Session, gebruiker, document: dict, reden: str) -> int:
+    """Lees een exportdocument in. Alles wordt eerst gevalideerd; bij één fout verandert er niets."""
+    if not isinstance(document, dict) or document.get("formaat") != "teeltplanning-instellingen":
+        raise OngeldigeWaarde("Dit is geen instellingenbestand van Teeltplanning.")
+    items = document.get("instellingen") or {}
+    onbekend = [k for k in items if k not in REGISTER]
+    if onbekend:
+        raise OngeldigeWaarde(f"Onbekende instellingen: {', '.join(sorted(onbekend))}")
+    snap = laad(db)
+    wijzigingen: list[tuple[str, Any, date | None]] = []
+    for sleutel, item in items.items():
+        inst = REGISTER[sleutel]
+        if inst.met_ingangsdatum:
+            for deel in item.get("reeks", []):
+                vanaf = date.fromisoformat(deel["geldig_vanaf"]) if deel.get("geldig_vanaf") else None
+                wijzigingen.append((sleutel, valideer(inst, deel.get("waarde")), vanaf))
+        else:
+            wijzigingen.append((sleutel, valideer(inst, item.get("waarde")), None))
+    aantal = 0
+    for sleutel, waarde, vanaf in wijzigingen:
+        huidig = snap.op(sleutel, vanaf) if REGISTER[sleutel].met_ingangsdatum else snap[sleutel]
+        if huidig != waarde or (REGISTER[sleutel].met_ingangsdatum and vanaf not in dict(snap.reeks(sleutel))):
+            wijzig(db, gebruiker, sleutel, waarde, reden, vanaf)
+            aantal += 1
+    return aantal

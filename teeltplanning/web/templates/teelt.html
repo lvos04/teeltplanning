@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% block titel %}Teelt kap {{ teelt.kap }} ronde {{ ronde.nummer }}{% endblock %}
+{% block inhoud %}
+<h1>Kap {{ teelt.kap }} · ronde {{ ronde.nummer }} <small>{{ teelt.schemacode or '' }}</small></h1>
+<p><a href="/ronde?scenario={{ ronde.scenario_id }}&nummer={{ ronde.nummer }}">← ronde {{ ronde.nummer }}</a> · <a href="/kap/{{ teelt.kap }}?scenario={{ ronde.scenario_id }}">kap {{ teelt.kap }}</a></p>
+{% if u.meldingen %}<ul class="meldingenlijst">{% for m in u.meldingen %}<li class="m-{{ m.niveau }}">{{ m.tekst }}</li>{% endfor %}</ul>{% endif %}
+<h2>Velden: voorstel, handmatig, effectief</h2>
+<table class="lagen">
+<thead><tr><th>veld</th><th>voorstel</th><th>handmatig</th><th>effectief</th><th>laatste wijziging</th>{% if kan_schrijven %}<th>wijzigen</th>{% endif %}</tr></thead>
+<tbody>
+{% for v in velden %}
+<tr>
+  <td>{{ v.label }}</td>
+  <td>{{ v.voorstel or 'onbekend' }}{% if v.voorstel_bron %}<br><small>{{ v.voorstel_bron }}</small>{% endif %}</td>
+  <td class="{% if v.handmatig %}handmatig{% endif %}">{{ v.handmatig }}</td>
+  <td>{{ v.effectief or 'onbekend' }}</td>
+  <td>{% if v.wijziging and v.wijziging.gewijzigd_op %}{{ v.wijziging.gewijzigd_op|tijd }} {{ v.door or '' }} {% if v.wijziging.handmatig_bron %}({{ v.wijziging.handmatig_bron }}){% endif %}{% if v.wijziging.reden %}<br><small>{{ v.wijziging.reden }}</small>{% endif %}{% endif %}</td>
+  {% if kan_schrijven %}<td>
+    <form method="post" action="/teelt/{{ teelt.id }}/veld/{{ v.naam }}" class="inline">
+      <input name="waarde" value="{{ v.handmatig }}" size="8" aria-label="nieuwe waarde {{ v.label }}">
+      <input name="reden" placeholder="reden (optioneel)" size="14">
+      <button name="actie" value="opslaan">Opslaan</button>
+      {% if v.handmatig %}<button name="actie" value="voorstel">Terug naar voorstel</button>{% endif %}
+    </form>
+  </td>{% endif %}
+</tr>
+{% endfor %}
+</tbody></table>
+<h2>Datums en aantallen</h2>
+<table class="lagen">
+<tr><th>licht uit</th><td>{{ u.licht_uit|wd('week-dag-jaar') or 'onbekend' }}</td></tr>
+<tr><th>licht aan (tussenlicht)</th><td>{{ u.licht_aan|wd('week-dag-jaar') or 'onbekend' }}</td></tr>
+<tr><th>tweede licht uit</th><td>{{ u.licht_uit_2|wd('week-dag-jaar') or 'onbekend' }}</td></tr>
+<tr><th>oogst (bloei)</th><td>{{ u.oogst|wd('week-dag-jaar') or 'onbekend' }}</td></tr>
+<tr><th>teeltduur</th><td>{{ u.teeltduur if u.teeltduur is not none else 'onbekend' }} dagen</td></tr>
+<tr><th>oppervlak</th><td>{{ u.oppervlak_m2|getal(0, 'onbekend (open vraag 4)') }}{% if u.oppervlak_m2 %} m²{% endif %}</td></tr>
+<tr><th>geplant</th><td>{{ u.geplant|getal(0, 'onbekend') }}</td></tr>
+<tr><th>oogstaantal</th><td>{{ u.oogstaantal|getal(0, 'onbekend') }}</td></tr>
+<tr><th>geoogst (werkboek V)</th><td>{{ teelt.geoogst_op|wd('week-dag-jaar') }}</td></tr>
+<tr><th>gemiddeld gewicht (werkboek X)</th><td>{{ teelt.gemiddeld_gewicht_g|getal(1) }}</td></tr>
+</table>
+<p class="hulp">Licht, energie, LBE en gewichtsprognose volgen in fase 3; modelvoorstellen in fase 4.</p>
+{% if bewijs %}
+<h2>Werkboekbewijs</h2>
+<p>{{ batch.bestandsnaam if batch else '' }}, blad {{ bewijs.blad }}, rij {{ bewijs.rij }}.</p>
+<table class="bewijs"><thead><tr><th>veld</th><th>cel</th><th>waarde</th><th>formule</th><th>gecachte uitkomst</th></tr></thead><tbody>
+{% for naam, c in bewijs.broncellen.items() if c is mapping and c.cell is defined %}<tr><td>{{ naam }}</td><td>{{ c.cell }}</td><td>{{ c.value if c.value is not none else '' }}</td><td><code>{{ c.formula or '' }}</code></td><td>{{ c.cached if c.cached is not none else '' }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+{% endblock %}

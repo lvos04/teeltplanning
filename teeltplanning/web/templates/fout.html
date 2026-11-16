@@ -1,0 +1,2 @@
+{% extends "base.html" %}{% block titel %}Fout {{ status }}{% endblock %}
+{% block inhoud %}<h1>Er ging iets mis ({{ status }})</h1><p class="melding fout">{{ melding }}</p><p><a href="javascript:history.back()">Terug</a></p>{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block titel %}Beheer{% endblock %}
+{% block inhoud %}
+<h1>Beheer</h1>
+<ul class="tegels">
+  {% if gebruiker.rol == 'beheerder' %}<li><a href="/beheer/instellingen">Instellingen</a><span>alle rekenwaarden, drempels, lijsten en regels</span></li>{% endif %}
+  <li><a href="/beheer/tabel/kappen">Kappen</a><span>vakgroep, oppervlak, plantvolgorde, wisseltijd, actief</span></li>
+  <li><a href="/beheer/tabel/rassen">Rassen</a><span>code, naam, doelgewicht</span></li>
+  {% if gebruiker.rol == 'beheerder' %}
+  <li><a href="/beheer/gebruikers/lijst">Gebruikers</a><span>rollen beheerder, medewerker, lezer</span></li>
+  <li><a href="/beheer/audit/log">Auditlog</a><span>wie, wanneer, oud, nieuw</span></li>
+  <li><a href="/beheer/backup/status">Back-up en export</a><span>status, schijfruimte, terugzetten</span></li>
+  {% endif %}
+  <li><a href="/beheer/mfa">Tweestapsverificatie</a><span>authenticator-app koppelen</span></li>
+</ul>
+<p class="hulp">Lampgroepen, parameters, afzetmomenten, prijzen, bronnen en koppelingen volgen in latere fasen.</p>
+{% endblock %}

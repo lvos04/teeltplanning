@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% from "_rij.html" import rij %}
+{% block titel %}Ronde {{ ronde.nummer }}{% endblock %}
+{% block inhoud %}
+<div class="balk">
+  <form method="get" action="/ronde" class="kiezer">
+    <label>Scenario <select name="scenario" onchange="this.form.submit()">{% for s in scenarios %}<option value="{{ s.id }}" {% if s.id == scenario.id %}selected{% endif %}>{{ s.naam }}{% if s.status == 'vastgesteld' %} (vastgesteld){% endif %}</option>{% endfor %}</select></label>
+    <label>Ronde <select name="nummer" onchange="this.form.submit()">{% for r in rondes %}<option value="{{ r.nummer }}" {% if r.id == ronde.id %}selected{% endif %}>{{ r.nummer }}</option>{% endfor %}</select></label>
+    <noscript><button>Tonen</button></noscript>
+  </form>
+  <h1>Ronde {{ ronde.nummer }}{% if ronde.label and ronde.label != 'Ronde ' ~ ronde.nummer %} <small>(werkboek: {{ ronde.label }})</small>{% endif %}</h1>
+  <span>ISO-jaar eerste planting: {{ ronde.iso_jaar_eerste_planting or 'onbekend' }}</span>
+</div>
+{% if oppervlak_onbekend %}<p class="melding info">Oppervlak per kap is onbekend (open vraag 4): geplant aantal, oogstaantal en cumulatief worden niet berekend. Vul het in bij <a href="/beheer/instellingen?groep=Bedrijf">Beheer → Instellingen → Bedrijf</a>.</p>{% endif %}
+{% if kan_schrijven %}<p class="hulp">Pijltjes, Tab en Enter om te bewegen en te bewerken; Esc annuleert. Een lege cel = terug naar voorstel (ook Ctrl+Backspace). <span class="handmatig">Gemarkeerd</span> = handmatig; <span class="keten">schuin</span> = plantdatum volgt de keten.</p>{% endif %}
+<div id="raster-melding" role="status"></div>
+<div class="raster-houder">
+<table class="raster" id="raster">
+  <thead>
+    <tr>{% for letter, sleutel, kop in kolommen %}<th class="k-{{ letter }}" title="kolom {{ letter }}">{{ kop }}</th>{% endfor %}<th>meldingen</th></tr>
+  </thead>
+  <tbody>
+  {% for r in rijen %}{{ rij(r, kolommen) }}{% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

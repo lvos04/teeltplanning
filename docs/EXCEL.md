@@ -59,3 +59,29 @@ buiten tijdvolgorde.
 Zoals Gewichtsverwachting (docs/EXCEL.md daar): upload maximaal 32 MiB, uitgepakt maximaal 512 MiB, geen
 macro's, geen versleutelde werkboeken, geen XML-entiteiten. Vanaf fase 1 instelbaar in Beheer → Instellingen →
 Import.
+
+## Importer `Teeltprogramma maken` (fase 1)
+
+Code: `teeltplanning/importers/programma.py` (alleen lezen) en `dienst.py` (importstroom). De veilige
+werkboekcontrole (`_validate_archive`: geen macro's, geen versleutelde onderdelen, geen XML-entiteiten,
+groottegrenzen), `_source`, `_int_literal`, `parse_schema` en de week/dag-hulpen (`iso_date`, `next_week_date`,
+`group_plant_years`) zijn overgenomen uit Gewichtsverwachting, met bronvermelding.
+
+* Een blad heet `Ronde N` en wordt herkend aan de kopteksten (instelling *Import → Rondeblad:
+  herkenningskoppen*). Kolommen, eerste/laatste regel en titelcel zijn instellingen.
+* Per kapregel wordt van elke kolom bewaard: cel, waarde, formule en gecachte uitkomst (tabel `werkboekregel`,
+  zichtbaar op de teeltpagina).
+* De vakgroep staat alleen op de eerste regel van een groep en wordt doorgevuld; een lege vakgroep in Beheer →
+  Kappen wordt ermee gevuld.
+* Het ISO-jaar van de eerste planting wordt per ronde gevraagd; binnen de ronde gaat het jaar één omhoog als de
+  plantweek zichtbaar terugspringt (meer dan 20 weken).
+* `tussenlicht` (K): week-dagtekst of datumcel → datum rond licht uit. `V` (`34-3`) → datum geoogst rond de
+  verwachte oogst. `R` wordt alleen bewaard (open vraag B2).
+* Invoerwaarden (G, J, L, M, T, Y en K) worden **handmatige waarden** in het scenario Werkboek. De plantdatum
+  ook, behalve als de plantweek een verwijzing naar de vorige ronde is en die ronde ook wordt geïmporteerd: dan
+  volgt de plantdatum de keten (instelling, open vraag B4).
+* Bevestigen schrijft alles in één transactie; nogmaals bevestigen of herimporteren maakt niets dubbel, en
+  waarden die een gebruiker in de app heeft ingevuld blijven staan.
+
+Uitkomst op het synthetische werkboek (1.360 kapregels, ISO-jaren 2020–2026): **1.289 gelijk, 70 52_weken,
+1 onvolledig** (bewust een regel zonder plantdatum), **0 afwijking**.

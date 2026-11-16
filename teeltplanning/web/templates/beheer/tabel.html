@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block titel %}{{ tabel|capitalize }}{% endblock %}
+{% block inhoud %}
+<h1>{{ tabel|capitalize }}</h1>
+<table class="lijst"><thead><tr>{% for k in kolommen %}<th>{{ k }}</th>{% endfor %}</tr></thead><tbody>
+{% for r in rijen %}<tr>{% for k in kolommen %}{% set w = r[k] %}<td>{% if w is sameas true %}ja{% elif w is sameas false %}nee{% elif w is none %}<span class="onbekend">onbekend</span>{% else %}{{ w }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table>
+<p><a href="/beheer/tabel/{{ tabel }}/export.csv">Exporteren als CSV</a></p>
+{% if gebruiker.rol == 'beheerder' %}
+<h2>Toevoegen, wijzigen of uitzetten</h2>
+<p class="hulp">Pas de CSV hieronder aan (puntkomma-gescheiden; leeg = onbekend; actief = ja/nee) en sla op. Regels worden nooit verwijderd; zet ze uit met actief = nee.</p>
+<form method="post" action="/beheer/tabel/{{ tabel }}/csv" class="formulier">
+  <textarea name="csv_tekst" rows="16" cols="90">{{ csv }}</textarea>
+  <input name="reden" placeholder="reden (optioneel)">
+  <button>Opslaan</button>
+</form>
+{% endif %}
+{% endblock %}

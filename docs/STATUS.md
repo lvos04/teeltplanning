@@ -83,3 +83,40 @@ die buiten de gevulde cellen ongemoeid, maar alleen de echte proef bewijst het.
 
 `pytest`: 25 geslaagd, 2 overgeslagen (de twee tests met het echte bestand). `ruff check` en
 `ruff format --check` schoon.
+
+## Fase 1 — Rekenkern, import en raster (versie 0.2.0)
+
+| Klaar als | Uitkomst |
+|---|---|
+| Voor alle 1.360 kapregels van het echte werkboek zijn licht uit, bloei en teeltduur gelijk aan de gecachte uitkomsten, behalve de 52-wekenfout; die staan in een rapport | **Gebouwd en getest op synthetisch; wacht op het echte werkboek.** De vergelijking (`importers/vergelijking.py`) staat in het importvoorbeeld en als CSV-rapport. Synthetisch (1.360 regels, ISO-jaren 2020–2026): 1.289 `gelijk`, 70 `52_weken`, 1 `onvolledig` (bewuste regel zonder plantdatum), **0 `afwijking`** (`tests/test_import_programma.py`, `tests/test_web_plan.py`; ook in de container nagelopen). Met het echte bestand: `TEELT_ECHT_PROGRAMMA=<pad> TEELT_ECHT_JAREN='1:2018,2:2018,…' pytest -s tests/test_import_programma.py`, of gewoon importeren in de app en de jaren invullen. Hoe het echte werkboek precies rekent, is open vraag B1. |
+| Een teelt over de jaarwisseling 2026/2027 klopt met de kalender (week 53 bestaat) | Gedaan: `test_week_53_van_2026_bestaat`, `test_teelt_over_jaarwisseling_2026_2027_kent_week_53` (licht uit 30-12-2026 = 53-3, oogst 2027 week 1). Het synthetische werkboek toont de 52-wekenfout in 2020 en 2026. |
+| Een wijziging in ronde N schuift door naar N+1 in dezelfde kap, tenzij daar de plantdatum is vastgezet | Gedaan: kern (`test_wijziging_schuift_door_tot_vastgezette_plantdatum`) en via de webapp (`test_import_raster_keten_herimport_en_instellingen`: LD + 7 in ronde 2 → ronde 3 schuift ≥ 7 dagen; na vastzetten in ronde 3 schuift niets meer). |
+| Handmatige waarden overleven een herimport en "terug naar voorstel" werkt | Gedaan: een in de app ingevulde dichtheid (met reden) blijft staan na een tweede import van hetzelfde werkboek; daarna "terug naar voorstel" (lege cel / Ctrl+Backspace / knop) → auditregels `veld_gewijzigd`, `veld_terug_naar_voorstel`. Een tweede identieke bevestiging maakt niets dubbel (1.360 teelten). |
+| Herberekening van het hele plan onder 200 ms (test) | Gedaan: `tests/test_prestatie.py`, circa 25 ms voor 34 × 40. |
+| `kern/` importeert niets van buiten zichzelf (test) | Gedaan: `tests/test_kern_zuiver.py` (AST-controle: alleen standaardbibliotheek en relatieve imports binnen `kern/`). |
+| Instellingenregister, scherm Beheer → Instellingen eruit gegenereerd, en elke waarde die fase 1 gebruikt komt uit het register (test op harde constanten) | Gedaan: `teeltplanning/instellingen.py` (alle 18 groepen van §4.3; Lampen wordt in fase 3 een beheertabel), scherm met groepen, zoeken, startwaarde, terug naar startwaarde, ingangsdatum en historie; export/import JSON. `test_geen_harde_getallen_in_kern_voorstel_afdruk` (alleen 0, 1, 7, 24, 60, 100, 3600 toegestaan). Kolomtoewijzing en herkenningskoppen van de importer zijn ook instellingen. |
+| Een gewijzigde instelling rekent het plan direct door en staat in het auditlog | Gedaan: *Dagen van licht uit tot licht aan* 12 → 14 verschuift licht aan met 2 dagen; auditregel met oud/nieuw. Oppervlak met ingangsdatum invullen → aantallen verschijnen. |
+
+Verder in fase 1:
+
+* **Schermen**: Ronde (40 regels, kolommen in de volgorde van het rondeblad, bewerkbare cellen,
+  toetsenbordnavigatie, markering handmatig, rijmeldingen, vaste eerste kolommen op de telefoon), Kap (ketting met
+  tijdbalk), Teelt (drie lagen, uitleg, werkboekbewijs). Browser-rooktest (`tests/browser_rooktest.py`, Chrome):
+  typen + Enter slaat op en markeert handmatig, focus gaat een rij omlaag, Esc annuleert, Ctrl+Backspace zet terug,
+  geen scriptfouten.
+* **Inloggen en rollen**, MFA, strikte oorsprong, aanmeldbeperking per account en IP met vertrouwde proxy's,
+  auditlog, back-up/herstel/export met herbevestiging, 1 MB verzoekgrens: `tests/test_beveiliging.py`.
+* **Oppervlak per kap is `null`** (vraag 4): geplant aantal, oogstaantal en cumulatief zijn "onbekend"; het
+  rondescherm toont dat bovenaan. Ook onbekend tot Leon antwoordt: uitvalvoorstel (tabel leeg), aantal dagen
+  tussenlicht (dus tweede licht uit), doelgewicht per ras.
+* Niet in fase 1 (volgens plan later): licht/energie/LBE (fase 3), modelvoorstellen (fase 4), scenario's
+  vergelijken en jaaroverzicht (fase 5), afdrukken (fase 2), koppeling (fase 6; alleen de instelling
+  *Bedrijfskoppeling ingeschakeld* = uit bestaat).
+
+### Tests en container fase 1
+
+* `pytest`: 80 geslaagd, 3 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon;
+  browser-rooktest geslaagd.
+* Docker (lokaal): image **806 MB**; start als 568, `/health` = `{"status":"ok","versie":"0.2.0"}`, healthcheck
+  `healthy`; met curl in de container: eerste beheerder, POST zonder Origin → 403, upload + jaren + bevestigen
+  van het synthetische werkboek → vergelijking 1.289/70/1, raster 40 regels, back-up gemaakt in `/data/backups/`.

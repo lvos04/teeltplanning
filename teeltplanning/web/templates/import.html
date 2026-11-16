@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block titel %}Import{% endblock %}
+{% block inhoud %}
+<h1>Import</h1>
+<h2>Teeltprogramma maken (rondebladen)</h2>
+<p>Uploaden → controlevoorbeeld met meldingen → per ronde het ISO-jaar van de eerste planting invullen → bevestigen.
+Het origineel blijft met checksum op de eigen dataset (<code>/data/bron/</code>). Er worden geen formules uitgevoerd.
+Handmatige waarden die in de app zijn ingevuld, blijven bij een herimport staan.</p>
+{% if kan_schrijven %}
+<form method="post" action="/import/upload" enctype="multipart/form-data" class="formulier">
+  <label>Werkboek (.xlsx) <input type="file" name="bestand" accept=".xlsx" required></label>
+  <button type="submit">Uploaden en controleren</button>
+</form>
+{% endif %}
+<p class="hulp">De importers voor <em>Belichting winterronde</em> en het teeltschema volgen in fase 3.</p>
+<h2>Eerdere imports</h2>
+<table class="lijst"><thead><tr><th>nr</th><th>bestand</th><th>status</th><th>geüpload</th><th>bevestigd</th></tr></thead><tbody>
+{% for b in batches %}<tr><td><a href="/import/{{ b.id }}">{{ b.id }}</a></td><td>{{ b.bestandsnaam }}</td><td>{{ b.status }}</td><td>{{ b.aangemaakt_op|tijd }}</td><td>{{ b.bevestigd_op|tijd }}</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

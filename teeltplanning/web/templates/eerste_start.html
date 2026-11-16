@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block titel %}Eerste start{% endblock %}
+{% block inhoud %}
+<h1>Eerste start</h1>
+<p>Maak de eerste beheerder aan. Er zijn geen standaardaccounts. Kies een wachtwoord van minimaal twaalf tekens.</p>
+<form method="post" action="/eerste-start" class="formulier">
+  <label>Gebruikersnaam <input name="gebruikersnaam" required maxlength="80" autocomplete="username"></label>
+  <label>Wachtwoord <input name="wachtwoord" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>
+  <button type="submit">Beheerder aanmaken</button>
+</form>
+{% endblock %}

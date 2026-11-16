@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block titel %}Auditlog{% endblock %}
+{% block inhoud %}
+<h1>Auditlog</h1>
+<form method="get" class="kiezer"><select name="actie" onchange="this.form.submit()"><option value="">alle acties</option>{% for a in acties %}<option {% if a == actie %}selected{% endif %}>{{ a }}</option>{% endfor %}</select><noscript><button>Filter</button></noscript></form>
+<table class="lijst"><thead><tr><th>wanneer</th><th>wie</th><th>actie</th><th>onderwerp</th><th>details</th></tr></thead><tbody>
+{% for r in regels %}<tr><td>{{ r.op|tijd }}</td><td>{{ namen.get(r.gebruiker_id, '') }}</td><td>{{ r.actie }}</td><td>{{ r.onderwerp }}</td><td><code>{{ r.details|tojson if r.details else '' }}</code></td></tr>{% endfor %}
+</tbody></table>
+<p>{% if pagina > 1 %}<a href="?pagina={{ pagina - 1 }}&actie={{ actie }}">← nieuwer</a>{% endif %} {% if regels|length == 100 %}<a href="?pagina={{ pagina + 1 }}&actie={{ actie }}">ouder →</a>{% endif %}</p>
+{% endblock %}

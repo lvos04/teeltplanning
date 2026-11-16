@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titel %}Teeltplanning{% endblock %} · Teeltplanning</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+<script src="/static/raster.js" defer></script>
+</head>
+<body>
+<header class="kop">
+  <a class="merk" href="/">Teeltplanning</a>
+  {% if gebruiker %}
+  <nav>
+    <a href="/ronde">Ronde</a>
+    <a href="/kap/1">Kap</a>
+    <a href="/import">Import</a>
+    <a href="/beheer">Beheer</a>
+  </nav>
+  <form method="post" action="/afmelden" class="afmelden">
+    <span>{{ gebruiker.gebruikersnaam }} ({{ gebruiker.rol }})</span>
+    <button type="submit">Afmelden</button>
+  </form>
+  {% endif %}
+</header>
+<main>
+{% if melding %}<div class="melding">{{ melding }}</div>{% endif %}
+{% block inhoud %}{% endblock %}
+</main>
+<footer>Teeltplanning {{ versie }}</footer>
+</body>
+</html>

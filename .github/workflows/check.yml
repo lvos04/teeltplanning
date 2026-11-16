@@ -22,10 +22,15 @@ jobs:
       - name: LibreOffice Calc zonder scherm (voor de pdf-proef)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-calc-nogui
       - run: pytest -q
+      - name: Browser-rooktest (raster, toetsenbord)
+        run: |
+          python -m playwright install --with-deps chromium
+          python tests/browser_rooktest.py browser-uitvoer
       - run: docker build -t teeltplanning:test .
       - name: Rooktest container (start als 568, /health)
         run: |
           docker run -d --name rooktest -p 8000:8000 teeltplanning:test
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/health && break; sleep 2; done
           test "$(docker exec rooktest id -u)" = "568"
+          curl -fsS http://127.0.0.1:8000/eerste-start | grep -q "Eerste start"
           docker rm -f rooktest

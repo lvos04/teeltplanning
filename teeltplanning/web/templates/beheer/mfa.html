@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block titel %}Tweestapsverificatie{% endblock %}
+{% block inhoud %}
+<h1>Tweestapsverificatie</h1>
+<p>Optioneel: koppel een authenticator-app (TOTP). Standaard uit.</p>
+{% if gebruiker.mfa_aan %}
+<p>Tweestapsverificatie staat <strong>aan</strong>.</p>
+<form method="post" action="/beheer/mfa/uit" class="inline"><input type="password" name="wachtwoord" placeholder="wachtwoord" required><input name="code" placeholder="code" required><button>Uitzetten</button></form>
+{% elif uri %}
+<p>Scan de QR-code of voer de sleutel handmatig in, en bevestig met een code.</p>
+{% if qr %}<img src="{{ qr }}" alt="QR-code voor de authenticator-app" width="200" height="200">{% endif %}
+<p><code>{{ gebruiker.mfa_geheim }}</code></p>
+<form method="post" action="/beheer/mfa/aan" class="inline"><input name="code" placeholder="code" inputmode="numeric" required><button>Aanzetten</button></form>
+{% else %}
+<form method="post" action="/beheer/mfa/start"><button>Instellen</button></form>
+{% endif %}
+{% endblock %}
