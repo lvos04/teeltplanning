@@ -272,6 +272,10 @@ def teelt_pagina(
             "naam": naam, "label": LABELS[naam], "voorstel": _veldtekst(naam, u.voorstel[naam]),
             "voorstel_bron": ("keten (oogst vorige teelt + wisseltijd)" if naam == "plantdatum" and u.voorstel[naam] and not (v and v.voorstel)
                               else "tabel uitval per oogstweek" if naam == "uitval" and u.voorstel[naam] and not (v and v.voorstel)
+                              else f"LBE × lichtsom / doelgewicht, afgerond (onafgerond {getal(u.dichtheid_onafgerond, 1)}); LBE {(u.lbe.status if u.lbe else '') or 'onbekend'}"
+                              if naam == "dichtheid" and u.voorstel[naam] is not None and not (v and v.voorstel)
+                              else f"LBE × lichtsom / dichtheid (band {getal(u.gewicht_band[0], 1)}–{getal(u.gewicht_band[1], 1)} g); LBE {(u.lbe.status if u.lbe else '') or 'onbekend'}"
+                              if naam == "gewicht" and u.voorstel[naam] is not None and not (v and v.voorstel)
                               else (v.bron if v and v.voorstel is not None else "")),
             "handmatig": _veldtekst(naam, u.effectief[naam]) if u.bron[naam] == "handmatig" else "",
             "effectief": _veldtekst(naam, u.effectief[naam]), "bron": u.bron[naam],

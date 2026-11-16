@@ -46,3 +46,8 @@ Telefoon met de authenticator kwijt en geen andere beheerder: in de container
 
 Maak een back-up, noteer de huidige imagetag, zet de nieuwe vaste tag. Terugrollen naar een oudere image: herstel
 ook de bijpassende back-up (een oudere image direct op een nieuwer schema openen is geen veilige rollback).
+
+## Geheime sleutels
+
+`/data/geheim.key` versleutelt de bronsleutels (zoals KNMI) en zit in de back-up. Wordt een back-up teruggezet
+zonder dit bestand, of gaat het verloren, vul de sleutels dan opnieuw in bij Beheer → Bronnen.

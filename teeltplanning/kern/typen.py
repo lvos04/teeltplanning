@@ -50,6 +50,7 @@ class TeeltInvoer:
     ronde: int  # volgorde van de ronde binnen het scenario
     volgnummer: int | None = None
     velden: dict[str, Veld] = field(default_factory=dict)
+    rassen: tuple[tuple[str, int | None], ...] = ()  # (rascode, bedden); gemengde kap zoals 3a3p
 
     def veld(self, naam: str) -> Veld:
         return self.velden.get(naam, Veld())
@@ -97,6 +98,8 @@ class KernInstellingen:
 class Parameters:
     kappen: dict[int, KapInvoer]
     instellingen: KernInstellingen
+    licht: Any = None  # kern.licht.LichtInvoer; None = geen licht-, energie- en LBE-berekening
+    gewas: Any = None  # kern.gewas.GewasInvoer
 
 
 @dataclass(frozen=True)
@@ -128,6 +131,11 @@ class TeeltUitkomst:
     geplant: float | None
     oogstaantal: float | None
     meldingen: tuple[Melding, ...]
+    lichtsom: Any = None  # kern.licht.Lichtsom
+    energie: Any = None  # kern.energie.Energie
+    lbe: Any = None  # kern.gewas.LbeKeuze
+    dichtheid_onafgerond: float | None = None
+    gewicht_band: tuple[float | None, float | None] = (None, None)
 
     @property
     def heeft_fout(self) -> bool:

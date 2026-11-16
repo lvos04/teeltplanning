@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block titel %}LBE en dichtheid{% endblock %}
+{% block inhoud %}
+<h1>LBE en dichtheid</h1>
+<p>LBE (lichtbenuttingsefficiëntie, g/mol) per ras, plantweek en lichtregime: <a href="/beheer/tabel/lbe">LBE-tabel</a> ({{ cellen }} cellen). Een cel met minder dan het minimum aantal waarnemingen valt terug op het seizoensgemiddelde van het ras (status indicatief).</p>
+{% if gebruiker.rol == 'beheerder' %}
+<form method="post" action="/beheer/lbe/kalibreren" class="inline"><button>Kalibreren uit realisatie</button></form>
+<span class="hulp">LBE gerealiseerd = gemiddeld takgewicht × dichtheid / lichtsom, per afgesloten teelt met één ras. Handmatige cellen blijven staan.</span>
+<form method="post" action="/beheer/lbe/dichtheden" class="inline"><button>Dichtheden afleiden uit de historie</button></form>
+{% endif %}
+<p>Toegestane dichtheden: {{ reeks|join(', ') if reeks else 'nog niet ingesteld (voorstel wordt niet afgerond)' }}.</p>
+<h2>IJkpunten belichtingsblad ({{ ijkpunten }} kappen)</h2>
+<p>Marge: {{ ijk.marge if ijk.marge is not none else 'nog niet afgesproken (vraag B24)' }}. Eigen LBE = gewicht realisatie × dichtheid (plan) / lichtsom (app).</p>
+<table class="lijst"><thead><tr><th>rij</th><th>kap</th><th>plantdatum</th><th>LBE prognose</th><th>LBE realisatie</th><th>lichtsom app</th><th>dichtheid</th><th>LBE app</th><th>verschil</th><th>oordeel</th></tr></thead><tbody>
+{% for r in ijk.regels %}<tr><td>{{ r.rij }}</td><td>{{ r.kap }}</td><td>{{ r.plantdatum|wd('week-dag-jaar') }}</td><td>{{ r.werkboek.lbe_prognose if r.werkboek.lbe_prognose is not none else '' }}</td><td>{{ r.werkboek.lbe_realisatie if r.werkboek.lbe_realisatie is not none else '' }}</td>
+<td>{{ r.lichtsom|getal(0, 'onbekend') }}</td><td>{{ r.dichtheid|getal(1, 'onbekend') }}</td><td>{{ r.lbe|getal(2, 'onbekend') }}</td><td>{{ r.verschil|getal(2) }}</td><td>{{ r.oordeel or r.reden or '' }}</td></tr>{% else %}<tr><td colspan="10">Nog geen belichtingsblad geïmporteerd.</td></tr>{% endfor %}
+</tbody></table>
+<h2>Gerealiseerde LBE per afgesloten teelt ({{ gerealiseerd|length }})</h2>
+<table class="lijst"><thead><tr><th>teelt</th><th>kap</th><th>ras</th><th>plantweek</th><th>lichtsom</th><th>LBE</th></tr></thead><tbody>
+{% for r in gerealiseerd[:200] %}<tr><td><a href="/teelt/{{ r.teelt }}">{{ r.teelt }}</a></td><td>{{ r.kap }}</td><td>{{ r.ras or 'gemengd' }}</td><td>{{ r.plantweek }}</td><td>{{ r.lichtsom|getal(0) }}</td><td>{{ r.lbe|getal(2) }}</td></tr>{% else %}<tr><td colspan="6">Geen: daarvoor zijn geoogste teelten met gewicht, dichtheid én een bekende lichtsom nodig.</td></tr>{% endfor %}
+</tbody></table>
+<p class="hulp">Teeltschema: {{ teeltschema }} regels geïmporteerd (kalibratie reactietijd en LD-dagen volgt in fase 4).</p>
+{% endblock %}

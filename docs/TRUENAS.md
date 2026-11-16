@@ -63,3 +63,9 @@ kopie op een andere locatie (Cloud Sync/Replication). Zie HERSTEL.md.
 
 Alle externe bronnen (KNMI, Open-Meteo, EnergyZero) en de bedrijfskoppeling staan na een schone installatie
 **uit**. De app werkt volledig zonder internet en zonder GPU.
+
+## Bronsleutels
+
+De KNMI-API-sleutel wordt versleuteld opgeslagen met `/data/geheim.key` (aangemaakt bij het eerste gebruik,
+rechten 0600). Dat bestand gaat mee in de back-up; zonder dat bestand moeten opgeslagen sleutels opnieuw worden
+ingevuld (Beheer → Bronnen).

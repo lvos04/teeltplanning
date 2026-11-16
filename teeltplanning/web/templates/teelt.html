@@ -38,7 +38,19 @@
 <tr><th>geoogst (werkboek V)</th><td>{{ teelt.geoogst_op|wd('week-dag-jaar') }}</td></tr>
 <tr><th>gemiddeld gewicht (werkboek X)</th><td>{{ teelt.gemiddeld_gewicht_g|getal(1) }}</td></tr>
 </table>
-<p class="hulp">Licht, energie, LBE en gewichtsprognose volgen in fase 3; modelvoorstellen in fase 4.</p>
+<h2>Licht, LBE en energie</h2>
+{% set ls = u.lichtsom %}
+<table class="lagen">
+<tr><th>lichtsom</th><td>{% if ls and ls.bekend %}{{ ls.totaal|getal(0) }} mol/m² over {{ ls.dagen }} dagen (zon {{ ls.zon|getal(0) }}, lampen {{ ls.lamp|getal(0) }}); band {{ ls.laag|getal(0) }}–{{ ls.hoog|getal(0) }}{% elif ls %}<span class="onbekend">onbekend</span>{% else %}<span class="onbekend">onbekend (geen datums)</span>{% endif %}</td></tr>
+{% if ls and ls.bekend %}<tr><th>zonlicht per soort</th><td>{% for s, n in ls.soorten.items() %}{{ s }}: {{ n }} d{% if not loop.last %}, {% endif %}{% endfor %}{% for n in ls.notities %}<br><small>{{ n }}</small>{% endfor %}</td></tr>{% endif %}
+{% if ls and ls.ontbrekend %}<tr><th>ontbrekend licht</th><td>{% for van, tot, reden in ls.ontbrekend[:20] %}{{ van|wd('week-dag-jaar') }}{% if tot != van %} t/m {{ tot|wd('week-dag-jaar') }}{% endif %}: {{ reden }}<br>{% endfor %}{% if ls.ontbrekend|length > 20 %}… ({{ ls.ontbrekend|length }} perioden){% endif %}</td></tr>{% endif %}
+<tr><th>LBE</th><td>{% if u.lbe and u.lbe.waarde is not none %}{{ u.lbe.waarde|getal(2) }} g/mol ({{ u.lbe.status }}; {{ u.lbe.uitleg }}){% elif u.lbe %}<span class="onbekend">onbekend</span> ({{ u.lbe.uitleg }}){% else %}<span class="onbekend">onbekend</span>{% endif %}</td></tr>
+<tr><th>dichtheidsvoorstel</th><td>{% if u.dichtheid_onafgerond is not none %}{{ u.voorstel.dichtheid|getal(1) }} planten/m² (niet afgerond {{ u.dichtheid_onafgerond|getal(2) }}){% else %}<span class="onbekend">onbekend</span>{% endif %}</td></tr>
+<tr><th>gewichtsprognose</th><td>{% if u.effectief.gewicht is not none %}{{ u.effectief.gewicht|getal(1) }} g{% if u.gewicht_band[0] is not none %} (band {{ u.gewicht_band[0]|getal(1) }}–{{ u.gewicht_band[1]|getal(1) }}){% endif %}{% else %}<span class="onbekend">onbekend</span>{% endif %}</td></tr>
+{% set e = u.energie %}
+<tr><th>stroom belichting</th><td>{% if e and e.kwh is not none %}{{ e.kwh|getal(0) }} kWh{% else %}<span class="onbekend">onbekend</span>{% if e %} ({{ e.dagen_zonder_kwh }} dag(en) zonder branduren of vermogen){% endif %}{% endif %}</td></tr>
+<tr><th>kosten</th><td>{% if e and e.kosten is not none %}€ {{ e.kosten|getal(2) }}{% if e.kosten_per_tak is not none %} · € {{ e.kosten_per_tak|getal(4) }} per tak{% endif %}{% else %}<span class="onbekend">onbekend</span>{% if e and e.dagen_zonder_prijs %} (stroomprijs onbekend, vraag 10){% endif %}{% endif %}</td></tr>
+</table>
 {% if bewijs %}
 <h2>Werkboekbewijs</h2>
 <p>{{ batch.bestandsnaam if batch else '' }}, blad {{ bewijs.blad }}, rij {{ bewijs.rij }}.</p>

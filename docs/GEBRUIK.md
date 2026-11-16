@@ -80,3 +80,31 @@ Daarna (iedereen, ook lezers): **Afdrukken** → scenario en ronde kiezen.
   standaard leeggemaakt (zodat er nooit een waarde van een andere kap op staat).
 * Lukt de pdf niet (fout, te lang bezig, of meer pagina's dan verwacht), dan krijg je een melding met een knop naar
   hetzelfde bestand als **Excel**.
+
+## Licht, energie en dichtheid (fase 3)
+
+**Lampgroepen** (Beheer → Lampgroepen): de vijf groepen uit het bouwplan staan erin; vul de maanden in
+(`geldig_vanaf`, `geldig_tot`, JJJJ-MM-DD). Zolang een geldende groep geen begindatum heeft, zijn lichtsom en kWh
+"onbekend".
+
+**Belichting importeren** (Import → Belichting winterronde): uploaden; het werkboek wordt op de achtergrond
+gelezen (de pagina ververst vanzelf). Het controlevoorbeeld toont de weekuren (per celtype, buiten 0–168), de
+kaptabel, de kostenvergelijking, het teeltschema en voor het tabblad data de periode, ontbrekende intervallen,
+onvolledige dagen, dubbele tijdstempels, regels buiten tijdvolgorde en zomer-/wintertijddagen. Vul het ISO-jaar
+van week 36 (weekuren) en van de eerste regel van het teeltschema in en bevestig. Nog een keer bevestigen of
+opnieuw importeren maakt niets dubbel.
+
+**Bronnen** (Beheer → Bronnen, alleen beheerder): alle bronnen staan uit. Zet Open-Meteo aan bij Instellingen →
+Bronnen (let op: gratis = niet-commercieel), vul breedte- en lengtegraad in (Instellingen → Bedrijf) en kies
+*Nu ophalen*. De app haalt de daghistorie (30 jaar) en de verwachting op en berekent de weeknormalen. KNMI: de
+sleutel kan worden opgeslagen en getest; waarden inlezen wacht op vraag B23.
+
+**Teelt**: onder *Licht, LBE en energie* staan lichtsom (zon/lamp, band, per soort zonlicht), de ontbrekende
+dagen met reden, LBE (waarde, status, uitleg), dichtheidsvoorstel (afgerond en niet afgerond), gewichtsprognose
+met band, kWh en kosten (per tak).
+
+**LBE en dichtheid** (Beheer): LBE-tabel (CSV), *Kalibreren uit realisatie*, *Dichtheden afleiden uit de
+historie*, en de ijkpunten uit het belichtingsblad naast de eigen LBE.
+
+**Energie**: kWh en kosten per week voor het bedrijf en per kap per week, per jaar; *Scenariovergelijking* zet
+twee lichtniveaus naast elkaar (takken, MWh, kosten per tak, meeropbrengst).

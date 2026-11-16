@@ -11,9 +11,16 @@ Handmatige waarden die in de app zijn ingevuld, blijven bij een herimport staan.
   <button type="submit">Uploaden en controleren</button>
 </form>
 {% endif %}
-<p class="hulp">De importers voor <em>Belichting winterronde</em> en het teeltschema volgen in fase 3.</p>
+<h2>Belichting winterronde (branduren, kaptabel, teeltschema, 5-minutendata)</h2>
+<p>Het werkboek wordt op de achtergrond gelezen (het tabblad <em>data</em> is groot); daarna volgt een controlevoorbeeld.</p>
+{% if kan_schrijven %}
+<form method="post" action="/import/belichting/upload" enctype="multipart/form-data" class="formulier">
+  <label>Werkboek (.xlsx) <input type="file" name="bestand" accept=".xlsx" required></label>
+  <button type="submit">Uploaden en lezen</button>
+</form>
+{% endif %}
 <h2>Eerdere imports</h2>
-<table class="lijst"><thead><tr><th>nr</th><th>bestand</th><th>status</th><th>geüpload</th><th>bevestigd</th></tr></thead><tbody>
-{% for b in batches %}<tr><td><a href="/import/{{ b.id }}">{{ b.id }}</a></td><td>{{ b.bestandsnaam }}</td><td>{{ b.status }}</td><td>{{ b.aangemaakt_op|tijd }}</td><td>{{ b.bevestigd_op|tijd }}</td></tr>{% endfor %}
+<table class="lijst"><thead><tr><th>nr</th><th>soort</th><th>bestand</th><th>status</th><th>geüpload</th><th>bevestigd</th></tr></thead><tbody>
+{% for b in batches %}<tr><td><a href="/import/{{ b.id }}">{{ b.id }}</a></td><td>{{ b.soort }}</td><td>{{ b.bestandsnaam }}</td><td>{{ b.status }}</td><td>{{ b.aangemaakt_op|tijd }}</td><td>{{ b.bevestigd_op|tijd }}</td></tr>{% endfor %}
 </tbody></table>
 {% endblock %}

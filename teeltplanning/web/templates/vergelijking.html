@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block titel %}Scenariovergelijking{% endblock %}
+{% block inhoud %}
+<h1>Scenariovergelijking belichting</h1>
+<p>Twee lichtniveaus naast elkaar, zoals "150 tegenover 200 µmol" in het werkboek: lichtsom, MWh per kap, takken, kosten per tak en meeropbrengst. Leeg = onbekend.</p>
+{% if werkboek %}<p class="hulp">Uit het belichtingsblad (AK–AM): {% for r in werkboek %}{{ r.omschrijving }}: {{ r.a }} / {{ r.b }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+<form method="get" action="/energie/vergelijking" class="raster-formulier">
+<table class="lijst"><thead><tr><th></th><th>A</th><th>B</th></tr></thead><tbody>
+<tr><th>naam</th><td><input name="a_naam" value="{{ v.a_naam }}"></td><td><input name="b_naam" value="{{ v.b_naam }}"></td></tr>
+<tr><th>intensiteit (µmol/m²/s)</th><td><input name="a_umol" value="{{ v.a_umol }}"></td><td><input name="b_umol" value="{{ v.b_umol }}"></td></tr>
+<tr><th>branduren per teelt</th><td><input name="a_uren" value="{{ v.a_uren }}"></td><td><input name="b_uren" value="{{ v.b_uren }}"></td></tr>
+<tr><th>kW per kap</th><td><input name="a_kw" value="{{ v.a_kw }}"></td><td><input name="b_kw" value="{{ v.b_kw }}"></td></tr>
+</tbody></table>
+<table class="lijst"><tbody>
+<tr><th>oppervlak per kap (m²)</th><td><input name="oppervlak" value="{{ v.oppervlak }}"></td></tr>
+<tr><th>lichtsom zon over de teelt (mol/m²)</th><td><input name="zon" value="{{ v.zon }}"></td></tr>
+<tr><th>LBE (g/mol)</th><td><input name="lbe" value="{{ v.lbe }}"></td></tr>
+<tr><th>doelgewicht (g)</th><td><input name="doelgewicht" value="{{ v.doelgewicht }}"></td></tr>
+<tr><th>stroomprijs incl. opslagen (€/MWh)</th><td><input name="prijs" value="{{ v.prijs }}"></td></tr>
+<tr><th>opbrengst per tak (€)</th><td><input name="opbrengst" value="{{ v.opbrengst }}"></td></tr>
+<tr><th>overige kosten per tak (€)</th><td><input name="overig" value="{{ v.overig }}"></td></tr>
+</tbody></table>
+<button name="rekenen" value="1">Rekenen</button>
+</form>
+{% if uitkomst %}
+{% set rijen = [("lichtsom_lamp", "lichtsom lampen (mol/m²)", 0), ("lichtsom", "lichtsom totaal (mol/m²)", 0), ("mwh_per_kap", "MWh per kap", 2), ("stroomkosten", "stroomkosten per kap (€)", 0), ("takken_per_m2", "takken per m²", 1), ("takken_per_kap", "takken per kap", 0), ("kosten", "kosten per kap (€)", 0), ("kosten_per_tak", "kosten per tak (€)", 4), ("opbrengst", "opbrengst per kap (€)", 0), ("saldo", "opbrengst − kosten (€)", 0)] %}
+<table class="lijst"><thead><tr><th></th><th>{{ uitkomst.a.naam }}</th><th>{{ uitkomst.b.naam }}</th><th>verschil (B − A)</th></tr></thead><tbody>
+{% for sleutel, label, dec in rijen %}<tr><th>{{ label }}</th><td>{{ uitkomst.a[sleutel]|getal(dec, 'onbekend') }}</td><td>{{ uitkomst.b[sleutel]|getal(dec, 'onbekend') }}</td><td>{{ uitkomst.verschil[sleutel]|getal(dec, 'onbekend') }}</td></tr>{% endfor %}
+<tr><th>meeropbrengst</th><td colspan="3"><strong>{{ uitkomst.meeropbrengst|getal(0, 'onbekend') }}</strong></td></tr>
+</tbody></table>
+{% endif %}
+{% endblock %}

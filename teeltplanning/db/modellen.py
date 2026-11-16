@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -226,3 +227,143 @@ class Sjabloon(Base):
     controle: Mapped[Any] = mapped_column(JSON, nullable=True)  # bladen, lettertypen, formulecellen
     geupload_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
     geupload_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+
+
+# --- Fase 3: licht, energie en dichtheid -------------------------------------------------------------------
+class Lampgroep(Base):
+    """Lampgroep (§6.4). `kap` leeg = alle kappen; module voor kap k = module_van + (k − 1). Een lege
+    `geldig_vanaf` betekent "begin onbekend": de groep telt dan niet mee en de lichtsom wordt onbekend."""
+
+    __tablename__ = "lampgroep"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100))
+    type: Mapped[str] = mapped_column(String(20))  # led | son_t
+    kap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    intensiteit_umol: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rendement_umol_per_j: Mapped[float | None] = mapped_column(Float, nullable=True)
+    kw_per_kap: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dimbaar: Mapped[bool] = mapped_column(Boolean, default=False)
+    module_van: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    module_tot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    geldig_vanaf: Mapped[date | None] = mapped_column(Date, nullable=True)
+    geldig_tot: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="bevestigd")  # bevestigd | indicatief
+    opmerking: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actief: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Weerdag(Base):
+    __tablename__ = "weerdag"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    datum: Mapped[date] = mapped_column(Date, index=True)
+    soort: Mapped[str] = mapped_column(String(20))  # gemeten | historie | verwachting
+    bron: Mapped[str] = mapped_column(String(30))  # knmi | open_meteo | handmatig
+    straling_j_cm2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    etmaaltemperatuur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    opgehaald_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    __table_args__ = (UniqueConstraint("datum", "soort", "bron"),)
+
+
+class Weeknormaal(Base):
+    """P10/P50/P90 van de stralingssom per ISO-week (J/cm² per week) uit de daghistorie."""
+
+    __tablename__ = "weeknormaal"
+    week: Mapped[int] = mapped_column(Integer, primary_key=True)
+    p10: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p50: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p90: Mapped[float | None] = mapped_column(Float, nullable=True)
+    jaren: Mapped[int] = mapped_column(Integer, default=0)
+    berekend_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+
+
+class BelichtingDag(Base):
+    """Dimgewogen uren per module per dag (uit de 5-minutendata). Kwaliteit: lijst met meldingen."""
+
+    __tablename__ = "belichting_dag"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    module: Mapped[int] = mapped_column(Integer)
+    datum: Mapped[date] = mapped_column(Date, index=True)
+    branduren: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dimgewogen_uren: Mapped[float | None] = mapped_column(Float, nullable=True)
+    volledig: Mapped[bool] = mapped_column(Boolean, default=False)
+    kwaliteit: Mapped[Any] = mapped_column(JSON, nullable=True)
+    importbatch_id: Mapped[int | None] = mapped_column(ForeignKey("importbatch.id"), nullable=True)
+    __table_args__ = (UniqueConstraint("module", "datum"),)
+
+
+class BelichtingWeek(Base):
+    """Branduren per module per ISO-week (tabblad belichting, volle kracht)."""
+
+    __tablename__ = "belichting_week"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    module: Mapped[int] = mapped_column(Integer)
+    iso_jaar: Mapped[int] = mapped_column(Integer)
+    week: Mapped[int] = mapped_column(Integer)
+    uren: Mapped[float | None] = mapped_column(Float, nullable=True)
+    celsoort: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    importbatch_id: Mapped[int | None] = mapped_column(ForeignKey("importbatch.id"), nullable=True)
+    __table_args__ = (UniqueConstraint("module", "iso_jaar", "week"),)
+
+
+class ParameterLbe(Base):
+    __tablename__ = "parameter_lbe"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ras: Mapped[str] = mapped_column(String(20))
+    plantweek: Mapped[int] = mapped_column(Integer)
+    lichtregime: Mapped[str] = mapped_column(String(50), default="")
+    lbe_g_per_mol: Mapped[float | None] = mapped_column(Float, nullable=True)
+    aantal_waarnemingen: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="onvoldoende")  # onvoldoende | indicatief | gevalideerd
+    bron: Mapped[str | None] = mapped_column(String(50), nullable=True)  # kalibratie | handmatig
+    bijgewerkt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu, onupdate=utcnu)
+    __table_args__ = (UniqueConstraint("ras", "plantweek", "lichtregime"),)
+
+
+class LbeIjkpunt(Base):
+    """Kaptabel op het tabblad belichting vanaf rij 87: eerste ijkpunten voor de LBE (§6.5)."""
+
+    __tablename__ = "lbe_ijkpunt"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    importbatch_id: Mapped[int | None] = mapped_column(ForeignKey("importbatch.id"), nullable=True)
+    rij: Mapped[int] = mapped_column(Integer)
+    kap: Mapped[int] = mapped_column(Integer)
+    plantdatum: Mapped[date | None] = mapped_column(Date, nullable=True)
+    waarden: Mapped[Any] = mapped_column(JSON)  # alle kolommen zoals gelezen (uren al omgerekend)
+
+
+class TeeltschemaRegel(Base):
+    __tablename__ = "teeltschema_regel"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    importbatch_id: Mapped[int | None] = mapped_column(ForeignKey("importbatch.id"), nullable=True)
+    rij: Mapped[int] = mapped_column(Integer)
+    kap: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plantdatum: Mapped[date | None] = mapped_column(Date, nullable=True)
+    waarden: Mapped[Any] = mapped_column(JSON)
+
+
+class Bronstatus(Base):
+    __tablename__ = "bronstatus"
+    bron: Mapped[str] = mapped_column(String(30), primary_key=True)
+    laatst_geprobeerd: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    laatst_gelukt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    melding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aantal: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class BronGeheim(Base):
+    """Geheime sleutels van bronnen (zoals de KNMI-API-sleutel), versleuteld met DATA_DIR/geheim.key."""
+
+    __tablename__ = "bron_geheim"
+    bron: Mapped[str] = mapped_column(String(30), primary_key=True)
+    versleuteld: Mapped[bytes] = mapped_column(LargeBinary)
+    gewijzigd_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+
+
+class Energieprijs(Base):
+    """Gemiddelde dagvooruitprijs per dag (EnergyZero), alleen voor de komende dag en achteraf."""
+
+    __tablename__ = "energieprijs"
+    datum: Mapped[date] = mapped_column(Date, primary_key=True)
+    eur_per_mwh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bron: Mapped[str] = mapped_column(String(30), default="energyzero")
+    opgehaald_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)

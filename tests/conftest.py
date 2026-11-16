@@ -91,3 +91,14 @@ def importeer(client, pad, jaren: dict[int, int]) -> int:
     antwoord = client.post(f"/import/{batch}/bevestig", follow_redirects=False)
     assert antwoord.status_code == 303, antwoord.text
     return batch
+
+
+@pytest.fixture(autouse=True)
+def geen_netwerk(monkeypatch):
+    """Externe bronnen worden in tests alleen met nep-HTTP getest: elk echt verzoek faalt hier."""
+    from teeltplanning.bronnen import http
+
+    def weiger(verzoek, tijdslimiet):
+        raise AssertionError(f"Echte netwerkverbinding in een test: {verzoek.full_url}")
+
+    monkeypatch.setattr(http, "_open", weiger)

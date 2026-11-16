@@ -67,3 +67,27 @@ teeltplanning/
 | Celtoewijzing | Rondeblad = kolomtoewijzing van de importer; teeltkaart = eigen toewijzing in het register, tweede kaart = verschuiving in kolommen | importeren en afdrukken gebruiken dezelfde cellen; Leon kan een verplaatste cel zelf aanpassen |
 | Netwerk bij conversie | `unshare -rn` als het mag, anders een proxy naar `127.0.0.1:9`; externe koppelingen zitten niet in de kopie | in de container (Docker-standaardprofiel) is een eigen netwerknaamruimte niet toegestaan |
 | Controle tegen het werkboek | Het werkboek zelf door LibreOffice laten herberekenen (met `fullCalcOnLoad` en een profiel dat altijd herberekent) | een onafhankelijke rekenweg; geen eigen formule-interpreter |
+
+## Fase 3: licht, energie en dichtheid
+
+```
+teeltplanning/
+  kern/licht.py        # lichtsom (Rekenaar met prefixsommen per kap), lampgroepen, weeknormalen
+  kern/energie.py      # kWh, kosten, per kap per week, scenariovergelijking
+  kern/gewas.py        # + LBE-keuze, dichtheidsvoorstel, takgewicht, afronden
+  voorstel/lbe.py      # kalibratie parameter_lbe, dichtheidsreeks uit de historie, ijkpunten belichtingsblad
+  importers/duur.py, belichting.py, belichting_dienst.py   # §7.2, achtergrondtaak
+  bronnen/http.py, open_meteo.py, knmi.py, energyzero.py, kluis.py, dienst.py
+  web/routes_licht.py
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Prijsscenario (§5 `prijsscenario`) | De instellingen *Stroomprijs voor de planning* en *Opslagen en belasting* **met ingangsdatum** vormen samen het prijsscenario per periode; geen aparte tabel | het register heeft al reeksen met ingangsdatum, audit en export |
+| Lampgroep ↔ kap | Eén regel per groep met `kap` leeg (= alle kappen) en `module_van`; module voor kap k = module_van + k − 1. Een regel voor één kap kan ook | 40 regels per groep is onnodig; afwijkende kappen blijven mogelijk |
+| Onbekende periode | `geldig_vanaf` leeg = onbekend: de groep maakt de lichtsom onbekend in plaats van te worden genegeerd | niets verzinnen (§0.2) |
+| EnergyZero | De openbare prijzen-API rechtstreeks via `bronnen/http.py` in plaats van het pakket `energyzero` | het pakket is async (aiohttp); zo één HTTP-laag met één nep-HTTP-testpunt en geen extra afhankelijkheden |
+| KNMI | Alleen sleutel (versleuteld) en verbindingstest; waarden inlezen staat uit | variabele, eenheid en formaat (NetCDF 4) niet geverifieerd (B23); geen NetCDF-lezer in de image |
+| Geheimen | Fernet met `DATA_DIR/geheim.key`, zoals het Bedrijfsdashboard | sleutels nooit in het register, de export of het auditlog |
+| Belichtingsimport | Lezen als achtergrondtaak (één tegelijk); de dagaggregaten als JSON naast het origineel; alleen de laatst gestarte leesbeurt mag het voorbeeld schrijven | het tabblad data is groot; bevestigen hoeft het niet opnieuw te lezen |
+| Rekentijd | Per kap prefixsommen over het hele plan; snelle weg voor het gewone geval (verleden, volledige dagdata); een globale controle slaat het dagwerk over als alles toch onbekend is | hele plan met licht < 200 ms (test) |

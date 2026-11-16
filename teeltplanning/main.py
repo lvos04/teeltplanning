@@ -19,9 +19,10 @@ from sqlalchemy import inspect, select, text
 from . import __version__, instellingen, onderhoud
 from .auth import NietAangemeld
 from .backups import maak_backup, pas_herstel_toe
+from .bronnen import dienst as bronnen_dienst
 from .db.basis import SessionLocal, engine
-from .db.modellen import Kap, Ras
-from .web import routes_afdruk, routes_auth, routes_beheer, routes_import, routes_plan
+from .db.modellen import Kap, Lampgroep, Ras
+from .web import routes_afdruk, routes_auth, routes_beheer, routes_import, routes_licht, routes_plan
 from .web.sjablonen import MAP, templates
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,6 +38,24 @@ UPLOADPADEN = (
 
 # Startgegevens die het bouwplan noemt: rassen a/p/t/b = Antonov/Pjotr/Tutu/Baltazar (§5), zonder doelgewicht.
 START_RASSEN = (("a", "Antonov"), ("p", "Pjotr"), ("t", "Tutu"), ("b", "Baltazar"))
+# Lampgroepen uit §6.4 (door de teler bevestigd op 16 november 2026, tenzij anders vermeld). De precieze maanden zijn
+# niet bevestigd (open vraag 1): geldig_vanaf/geldig_tot blijven leeg ("onbekend") tot Leon ze invult.
+START_LAMPGROEPEN = (
+    dict(naam="SON-T volledig", type="son_t", intensiteit_umol=120.0, kw_per_kap=50.0, dimbaar=False, status="indicatief",
+         opmerking="Tot circa zomer 2023. Intensiteit en vermogen afgeleid uit het kostenblok (resterende helft = 1 MW "
+                   "over 40 kappen en 60 µmol). Modulenummers onbekend."),
+    dict(naam="LED fase 1 (2023–2024)", type="led", intensiteit_umol=80.0, kw_per_kap=20.0, dimbaar=False, module_van=1,
+         module_tot=40, opmerking="Circa zomer 2023 – zomer 2024; 0,8 MW totaal."),
+    dict(naam="SON-T resterend (50%)", type="son_t", intensiteit_umol=60.0, kw_per_kap=25.0, dimbaar=False, module_van=101,
+         module_tot=140, opmerking="Circa zomer 2023 – zomer 2024; 1 MW totaal. Het tabblad belichting (week 36 t/m 10) is "
+                                   "waarschijnlijk winter 2023/24 (vraag 2)."),
+    dict(naam="LED fase 1 (vanaf 2024)", type="led", intensiteit_umol=80.0, kw_per_kap=20.0, dimbaar=False, module_van=1,
+         module_tot=40, opmerking="Vanaf uiterlijk juli 2024. Staat niet in het tabblad data; bron voor branduren navragen (vraag 3)."),
+    dict(naam="LED fase 2", type="led", intensiteit_umol=120.0, kw_per_kap=27.5, dimbaar=True, module_van=101, module_tot=140,
+         status="indicatief",
+         opmerking="Vanaf uiterlijk juli 2024; dimbaar. Bevestigd: samen met fase 1 47,5 kW per kap (1,9 MW totaal); "
+                   "27,5 kW is afgeleid (47,5 − 20). 5-minutendata met dimstand in het tabblad data vanaf 1 juli 2024."),
+)  # fmt: skip
 
 
 def migreer() -> None:
@@ -61,6 +80,9 @@ def startgegevens() -> None:
         if db.scalar(select(Kap.nummer).limit(1)) is None:
             for nummer in range(1, snap["bedrijf.aantal_kappen"] + 1):
                 db.add(Kap(nummer=nummer, plantvolgorde=nummer))
+        if db.scalar(select(Lampgroep.id).limit(1)) is None:
+            for groep in START_LAMPGROEPEN:
+                db.add(Lampgroep(**groep))
         bestaand = {r.code for r in db.scalars(select(Ras))}
         for code, naam in START_RASSEN:
             if code not in bestaand:
@@ -79,6 +101,10 @@ async def achtergrond() -> None:
             await asyncio.to_thread(onderhoud.backup_als_nodig)
         except Exception:
             log.exception("Automatische lokale back-up mislukt")
+        try:
+            await asyncio.to_thread(bronnen_dienst.ververs_als_nodig)
+        except Exception:
+            log.exception("Bijwerken van externe bronnen mislukt")
 
 
 @asynccontextmanager
@@ -197,5 +223,6 @@ app.include_router(routes_auth.router)
 app.include_router(routes_plan.router)
 app.include_router(routes_import.router)
 app.include_router(routes_afdruk.router)
+app.include_router(routes_licht.router)
 app.include_router(routes_beheer.router)
 app.mount("/static", StaticFiles(directory=str(MAP / "static")), name="static")
