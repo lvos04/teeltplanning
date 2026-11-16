@@ -58,6 +58,15 @@
 <tr><th>stroom belichting</th><td>{% if e and e.kwh is not none %}{{ e.kwh|getal(0) }} kWh{% else %}<span class="onbekend">onbekend</span>{% if e %} ({{ e.dagen_zonder_kwh }} dag(en) zonder branduren of vermogen){% endif %}{% endif %}</td></tr>
 <tr><th>kosten</th><td>{% if e and e.kosten is not none %}€ {{ e.kosten|getal(2) }}{% if e.kosten_per_tak is not none %} · € {{ e.kosten_per_tak|getal(4) }} per tak{% endif %}{% else %}<span class="onbekend">onbekend</span>{% if e and e.dagen_zonder_prijs %} (stroomprijs onbekend, vraag 10){% endif %}{% endif %}</td></tr>
 </table>
+<h2>Gewichtsverwachting</h2>
+{% if gv is none %}<p class="hulp">Niet gekoppeld (geen koppelbron, of geen eenduidige teelt op deze kap en plantdatum; zie Beheer → Koppelingen).</p>
+{% else %}{% set p = gv.prognose %}
+<table class="lagen">
+<tr><th>gekoppelde teelt</th><td>{{ gv.teelt.id }} (kap {{ gv.teelt.kap }}, plantdatum {{ gv.teelt.plantdatum }}, {{ gv.teelt.status or '' }})</td></tr>
+<tr><th>prognose op basis van metingen</th><td>{% if p and p.status == 'gevalideerd' and p.gewicht_g is not none %}{{ p.gewicht_g|getal(1) }} g{% if p.ondergrens_g is not none %} (band {{ p.ondergrens_g|getal(1) }}–{{ p.bovengrens_g|getal(1) }}){% endif %}, peilmoment {{ p.peilmoment }}{% if p.modeltype %}, model {{ p.modeltype }}{% endif %}
+  {% elif p %}<span class="onbekend">geen gevalideerde prognose</span> ({{ p.toelichting or p.status }}){% else %}<span class="onbekend">nog geen prognose</span>{% endif %}</td></tr>
+<tr><th>planprognose (deze app)</th><td>{% if u.effectief.gewicht is not none %}{{ u.effectief.gewicht|getal(1) }} g{% else %}<span class="onbekend">onbekend</span>{% endif %}</td></tr>
+</table>{% endif %}
 {% if bewijs %}
 <h2>Werkboekbewijs</h2>
 <p>{{ batch.bestandsnaam if batch else '' }}, blad {{ bewijs.blad }}, rij {{ bewijs.rij }}.</p>

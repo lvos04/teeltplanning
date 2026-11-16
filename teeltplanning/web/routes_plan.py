@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .. import auth, instellingen
 from ..db.basis import get_db
-from ..db.modellen import Gebruiker, Importbatch, Kap, Ronde, Scenario, Teelt, Werkboekregel
+from ..db.modellen import Gebruiker, Importbatch, Kap, Koppelbron, Ronde, Scenario, Teelt, Werkboekregel
 from ..kern.kalender import week_dag, weergave
 from ..kern.keten import LABELS
 from ..kern.typen import DATUMVELDEN, VELDEN
@@ -280,8 +280,12 @@ def teelt_pagina(
         select(Werkboekregel).where(Werkboekregel.teelt_id == teelt.id).order_by(Werkboekregel.id.desc())
     )
     batch = db.get(Importbatch, bewijs.importbatch_id) if bewijs else None
+    from ..bronnen import koppelbronnen
+
+    realisatie = koppelbronnen.prognose(db, teelt.id) if db.scalar(select(Koppelbron.id).limit(1)) else None
     return templates.TemplateResponse(request, "teelt.html", {
         "gebruiker": gebruiker, "teelt": teelt, "ronde": ronde, "u": u, "velden": velden, "bewijs": bewijs, "batch": batch,
+        "gv": realisatie,
         "kan_schrijven": gebruiker.rol in ("beheerder", "medewerker"),
     })  # fmt: skip
 

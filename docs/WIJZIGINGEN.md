@@ -92,3 +92,18 @@ het register, onbekende waarden zijn `null` met een verwijzing naar OPEN_VRAGEN.
   toegestane oogstdagen (waarschuwing). Nieuwe instellingen in *Afzet*, *Zoeken* en de nieuwe groep *Genereren*.
 * Nieuwe afhankelijkheid: `holidays` (met `python-dateutil`). Database: migratie `0005` (`afzetmoment`, `zoekrun`,
   `scenario.vastgesteld_op`).
+
+## 0.7.0 — fase 6: koppelingen
+
+* Bedrijfskoppeling API v1 aanbieden (§11.1, `teeltplanning/koppeling.py`): `/api/koppeling/v1/info`,
+  `/samenvatting` (zes KPI's, meldingen) en de datasets `planning`, `oogstprognose`, `energieprognose`,
+  `afzetmomenten`, alleen van het vastgestelde plan; koppelsleutels (alleen SHA-256-hash, eenmalig getoond,
+  intrekken, audit), 120 verzoeken per minuut per sleutel, controlevolgorde 403 → 401 → 429 → 404 → 422, paginering
+  met cursor en `sinds`. Schakelaar en sleutels in *Beheer → Koppelingen → Bedrijfskoppeling* (standaard uit);
+  JSON-beheer onder `/api/beheer/koppelsleutels` en een CLI-commando.
+* Afnemen uit Gewichtsverwachting (§11.2, `bronnen/koppelbronnen.py`): koppelbronnen met versleutelde sleutel,
+  instelbaar interval en *Nu ophalen*, standaard uit; `403 koppeling_uitgeschakeld` = "staat uit bij de bron";
+  koppelen op kap + plantdatum ± tolerantie met een lijst niet-gekoppelde teelten; gekoppelde teelten voeden de
+  LBE-kalibratie en het model; prognoses op de teeltpagina.
+* Database: migratie `0006` (`koppelsleutel`, `koppelbron`, `koppel_item`). Docs: `docs/koppeling-api.md`.
+* Niet gedaan (wacht op akkoord, §11.3): de pull requests in Gewichtsverwachting en het Bedrijfsdashboard.

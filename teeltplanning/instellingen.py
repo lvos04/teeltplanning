@@ -369,8 +369,19 @@ REGISTER_LIJST: list[Instelling] = [
     I("bronnen.percentielen", "Bronnen", "Percentielen weeknormaal", "Onder, midden (plannen) en boven, in procenten.", "lijst", ["10", "50", "90"], fase=3),
     # --- Koppeling (fase 6) ------------------------------------------------------------------------------
     I("koppeling.ingeschakeld", "Koppeling", "Bedrijfskoppeling ingeschakeld",
-      "Bedrijfskoppeling API v1 aanbieden. Uit = alle koppelroutes geven 403 koppeling_uitgeschakeld (vanaf fase 6).", "bool", False),
+      "Bedrijfskoppeling API v1 aanbieden (Beheer → Koppelingen → Bedrijfskoppeling). Uit = alle koppelroutes geven 403 koppeling_uitgeschakeld.", "bool", False),
     I("koppeling.verzoeken_per_minuut", "Koppeling", "Verzoeken per minuut per sleutel", "Limiet van het contract.", "geheel", 120, min=1, max=10000, fase=6),
+    I("koppeling.datasets", "Koppeling", "Gedeelde datasets", "Welke datasets andere apps mogen ophalen (alleen het vastgestelde plan).", "lijst",
+      ["planning", "oogstprognose", "energieprognose", "afzetmomenten"], keuzes=("planning", "oogstprognose", "energieprognose", "afzetmomenten"), fase=6),
+    I("koppeling.indicatief_grens_pct", "Koppeling", "Grens voorstellen indicatief",
+      "KPI voorstellen_indicatief krijgt status let_op boven dit percentage. Leeg = let_op bij elk indicatief voorstel.", "getal", None, "%", min=0, max=100, null=True, fase=6),
+    I("koppeling.bronnen_aan", "Koppeling", "Koppelbronnen ophalen",
+      "Gegevens ophalen bij andere bedrijfsapps (Gewichtsverwachting: teelten, oogsten, metingen, prognoses). Standaard uit.", "bool", False, fase=6),
+    I("koppeling.ophaalinterval_uren", "Koppeling", "Ophaalinterval koppelbronnen", "Hoe vaak een actieve koppelbron wordt bijgewerkt.", "geheel", 6, "uur", min=1, max=168, fase=6),
+    I("koppeling.max_paginas", "Koppeling", "Maximum pagina's per dataset", "Veiligheidsgrens bij het ophalen (500 items per pagina). Technische startwaarde.", "geheel", 200, min=1, max=10000, fase=6),
+    I("koppeling.oogstdatum_realisatie", "Koppeling", "Gerealiseerde oogstdatum",
+      "Welke datum uit de oogstregistratie van Gewichtsverwachting als oogstdatum telt voor de gerealiseerde reactietijd. Leeg = onbekend: "
+      "dan wordt de reactietijd niet uit Gewichtsverwachting overgenomen.", "keuze", None, keuzes=("begindatum", "einddatum"), null=True, vraag="B40", fase=6),
     # --- Beveiliging (zoals Gewichtsverwachting) ---------------------------------------------------------
     I("beveiliging.sessie_uren", "Beveiliging", "Sessieduur", "Hoe lang een aanmelding geldig blijft.", "geheel", 12, "uur", min=1, max=168),
     I("beveiliging.inlogpogingen_account", "Beveiliging", "Maximale inlogpogingen per account", "Binnen het venster.", "geheel", 5, min=3, max=50),

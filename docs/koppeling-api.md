@@ -1,8 +1,8 @@
 # Bedrijfskoppeling API v1
 
-> Kopie van het gedeelde contract uit `lvos04/bedrijfsdashboard/docs/koppeling-api.md` (BOUWPLAN §11).
-> Het app-specifieke deel voor Teeltplanning (slug `teeltplanning`) staat onderaan. De koppeling wordt in
-> **fase 6** gebouwd; tot dan bestaat alleen de instelling "Bedrijfskoppeling ingeschakeld" (standaard uit).
+> Kopie van het gedeelde contract uit `lvos04/bedrijfsdashboard/docs/koppeling-api.md` (BOUWPLAN §11). Het
+> app-specifieke deel voor Teeltplanning (slug `teeltplanning`) staat onderaan. De rij voor `teeltplanning` in de
+> tabel met schakelaarplekken staat (nog) niet in het dashboard; die komt pas met de PR uit §11.3 na akkoord van Leon.
 
 
 Doel: elke bedrijfsapp (teeltregistratie/milieu, gewichtsverwachting, scouten, tuinwerk-os)
@@ -52,7 +52,9 @@ deelt een kleine, **alleen-lezen** set gegevens in een vast formaat, zodat het n
   | `gewichtsverwachting` | Beheer → Bedrijfskoppeling |
   | `scouten` | Beheer & instellingen → Koppelingen |
   | `tuinwerk-os` | Beheer → Integraties → Bedrijfskoppeling |
+  | `priva-bridge` | Beheer → Bedrijfskoppeling |
   | `bedrijfsdashboard` | Beheer → Koppelsleutels van dit dashboard |
+  | `teeltplanning` | Beheer → Koppelingen → Bedrijfskoppeling *(deze app; nog toe te voegen in het dashboard, §11.3)* |
 
   Een andere `403` (zonder deze foutcode) blijft een gewone fout ("Bron gaf HTTP 403").
 
@@ -61,7 +63,7 @@ deelt een kleine, **alleen-lezen** set gegevens in een vast formaat, zodat het n
 ### `GET /api/koppeling/v1/info`
 ```json
 {
-  "app": "milieu-registratie",          // vaste slug: milieu-registratie | gewichtsverwachting | scouten | tuinwerk-os | bedrijfsdashboard
+  "app": "milieu-registratie",          // vaste slug: milieu-registratie | gewichtsverwachting | scouten | tuinwerk-os | priva-bridge | bedrijfsdashboard
   "naam": "Teeltregistratie OS",
   "versie": "0.4.2",                    // appversie
   "api_versie": "1",
@@ -161,12 +163,78 @@ Zolang er nog geen gegevens zijn opgehaald zijn de waarden `null` (status `onbek
 
 ---
 
-## Specifiek voor Teeltplanning (slug `teeltplanning`) — gepland voor fase 6
+## Specifiek voor Teeltplanning (slug `teeltplanning`)
 
-Schakelaar: **Beheer → Koppelingen → Bedrijfskoppeling** ("Bedrijfskoppeling ingeschakeld", standaard uit).
-Alleen het **vastgestelde** scenario wordt gedeeld, nooit een concept. Ontbrekende waarde = `null`.
+### Aanbieden
 
-KPI's (`/samenvatting`): `plantingen_komende_14_dagen`, `oogsten_komende_14_dagen`, `oogstprognose_deze_week`,
-`planconflicten`, `voorstellen_indicatief`, `kwh_komende_week` (zie BOUWPLAN §11.1).
+* **Schakelaar**: *Beheer → Koppelingen → Bedrijfskoppeling* ("Bedrijfskoppeling ingeschakeld", instelling
+  `koppeling.ingeschakeld`, **standaard uit**). Uit → elke route onder `/api/koppeling/v1` geeft
+  `403 {"fout": "koppeling_uitgeschakeld"}`, ook zonder sleutel en bij ongeldige parameters.
+* **Sleutels**: *Beheer → Koppelingen* (aanmaken: de sleutel staat één keer op de pagina; intrekken), JSON voor
+  beheerders (sessie + oorsprongcontrole):
+  * `GET /api/beheer/koppelsleutels` — lijst (nooit sleutel of hash)
+  * `POST /api/beheer/koppelsleutels` `{"naam": "..."}` → `201` met eenmalig `sleutel`
+  * `DELETE /api/beheer/koppelsleutels/{id}` → `204`
+  * CLI: `python -m teeltplanning.beheer_cli koppelsleutel <naam>` / `koppelsleutel-intrekken <id>`
+  Aanmaken en intrekken komen in het auditlog (zonder de sleutel). Alleen de SHA-256-hash en de eerste 8 tekens
+  worden bewaard. Niet-beheerders: `403`; niet aangemeld: `401`.
+* **Limiet**: 120 verzoeken per minuut per sleutel (instelling `koppeling.verzoeken_per_minuut`) →
+  `429 {"fout": "te_veel_verzoeken"}` met `Retry-After: 60`.
+* **Volgorde**: uit → 403; sleutel → 401; limiet → 429; onbekende (of niet gedeelde) dataset →
+  `404 {"fout": "onbekende_dataset"}`; ongeldige `sinds` (ISO 8601 **met** tijdzone), `limiet` (1..500), `cursor`
+  of een onbekende parameter → `422 {"fout": "ongeldige_parameter", "veld": "..."}`.
+* Alleen het **vastgestelde** scenario wordt gedeeld, nooit een concept. Zonder vastgesteld plan zijn de datasets
+  leeg en alle KPI's `null`/`onbekend`. Geen vrije tekst (opmerkingen) en geen gebruikersnamen.
+* Welke datasets gedeeld worden: instelling `koppeling.datasets` (start: alle vier). `info.bedrijf` = instelling
+  *Bedrijfsnaam* (of `null`).
 
-Datasets: `planning`, `oogstprognose`, `energieprognose`, `afzetmomenten` (velden: BOUWPLAN §11.1).
+### KPI's in `/samenvatting`
+
+| sleutel | betekenis | status |
+|---|---|---|
+| `plantingen_komende_14_dagen` | teelten met plantdatum vandaag t/m +14 dagen | `ok` |
+| `oogsten_komende_14_dagen` | teelten met geplande oogst vandaag t/m +14 dagen | `ok` |
+| `oogstprognose_deze_week` | verwacht aantal takken met de oogst in de huidige ISO-week | `ok`; `onbekend` + `null` als een oogstaantal onbekend is (bijv. oppervlak per kap) |
+| `planconflicten` | lopende en geplande teelten met een fout (overlap, buiten de grenzen) of een ontbrekende plantdatum, LD-dagen, reactietijd of verlenging | `actie` bij > 0 |
+| `voorstellen_indicatief` | % van de geplande teelten waarvan een effectieve waarde een voorstel is dat niet op een gevalideerd model (of een gevalideerde LBE) rust | `let_op` boven `koppeling.indicatief_grens_pct` (leeg: boven 0) |
+| `kwh_komende_week` | kWh belichting van het plan, vandaag t/m +7 dagen | `onbekend` + `null` zonder lichtdata |
+
+Meldingen: planconflicten (`waarschuwing`), verlopen weerdata van een ingeschakelde weerbron (`waarschuwing`),
+teelten zonder belichtingsdata (`info`), geen of verouderde lokale back-up (`waarschuwing`/`kritiek`).
+
+### Datasets
+
+| naam | velden per item | `id` / sortering | `bijgewerkt_op` (voor `sinds`) |
+|---|---|---|---|
+| `planning` | `id, ronde, kap, vakgroep, volgnummer, soort, bedden, plantdatum, ld_dagen, licht_uit_datum, reactietijd, verlenging, oogstdatum, teeltduur, dichtheid, gepland_aantal, uitvalfractie, oogstaantal, gewicht_g, gewicht_ondergrens_g, gewicht_bovengrens_g, handmatig_velden[], bijgewerkt_op` | teelt-id | laatste wijziging in dezelfde **kap** (een wijziging schuift de hele keten) of aan het hele plan (instellingen, kappen, model, imports, bronnen, vaststellen) |
+| `oogstprognose` | `id (iso_jaar-week), iso_jaar, week, aantal_takken, gemiddeld_gewicht_g, ondergrens_g, bovengrens_g, aantal_teelten, bijgewerkt_op` | jaar, week | laatste wijziging aan het plan |
+| `energieprognose` | `id (iso_jaar-week-kap), iso_jaar, week, kap, dimgewogen_uren, kwh, kosten_eur, soort (gerealiseerd/gepland/gemengd), bijgewerkt_op` | jaar, week, kap | idem |
+| `afzetmomenten` | `id (moment-jaar), naam, datum, venster_begin, venster_eind, gewicht, geplande_takken_in_venster` | datum, moment | idem (geen eigen veld; zie hieronder) |
+
+* `aantal_takken`, gewichten en kWh zijn `null` zodra één onderliggende waarde onbekend is (nooit een verzonnen 0).
+* `energieprognose.dimgewogen_uren` is altijd `null`: een kap heeft meerdere lampgroepen met eigen uren (B41).
+* `energieprognose` telt alleen dagen waarop er een teelt in de kap staat.
+* `afzetmomenten`: `venster_begin/eind` = oogst in [datum − venster, datum − 1]; `null` zolang het venster
+  onbekend is (vraag 9). `geplande_takken_in_venster` is `null` als oogstaantallen onbekend zijn.
+
+Voorbeeld:
+
+```bash
+curl -s -H "Authorization: Bearer $SLEUTEL" "https://teelt.example/api/koppeling/v1/datasets/planning?limiet=500&sinds=2026-11-01T00:00:00Z"
+```
+
+### Afnemen (Gewichtsverwachting)
+
+* *Beheer → Koppelingen → Koppelbronnen*: naam, app, adres en koppelsleutel (versleuteld met
+  `DATA_DIR/geheim.key`, zoals het Bedrijfsdashboard). Ophalen alleen als **Koppelbronnen ophalen** aan staat
+  (`koppeling.bronnen_aan`, standaard uit): elk `koppeling.ophaalinterval_uren` (start 6) en met *Nu ophalen*.
+* Haalt `/info` (controle: `app` = `gewichtsverwachting`) en de datasets `teelten`, `oogsten`, `metingen`,
+  `prognoses` volledig op (limiet 500, `volgende_cursor`), en vervangt de vorige kopie per dataset.
+* `403 {"fout": "koppeling_uitgeschakeld"}` → status *staat uit bij de bron* met de uitleg
+  "Staat uit bij de bron (Gewichtsverwachting: Beheer → Bedrijfskoppeling)", geen storing. `401` → "koppelsleutel
+  geweigerd".
+* Koppelen op kap + plantdatum ± `import.koppel_tolerantie_dagen` (leeg = dezelfde dag) aan het vastgestelde plan.
+  Geen of meer dan één kandidaat, of twee bronteelten op één planteelt: **niet gekoppeld**, met de reden in een lijst.
+* Gekoppelde teelten → waarnemingen (gewicht en uitval uit `oogsten`, LD-dagen uit plant- en licht-uitdatum,
+  reactietijd alleen als `koppeling.oogstdatum_realisatie` is ingesteld, B40) voor de LBE-kalibratie en de
+  voorstelladder. `prognoses` (alleen status `gevalideerd`) staan op de teeltpagina naast de planprognose.

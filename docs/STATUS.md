@@ -258,3 +258,38 @@ Verder in fase 5:
 
 * `pytest`: 171 geslaagd, 5 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon.
 * Nieuwe afhankelijkheid `holidays` 0.107 (+ `python-dateutil`, `six`; ±10 MB).
+
+## Fase 6 — Koppelingen (versie 0.7.0)
+
+Alleen §11.1 en §11.2. De pull requests uit §11.3 (Gewichtsverwachting, Bedrijfsdashboard) zijn **niet** gemaakt:
+die wachten op akkoord van Leon (B42).
+
+| Klaar als | Uitkomst |
+|---|---|
+| Contracttests: 401 zonder/ongeldige/ingetrokken sleutel | **Gedaan.** `test_401_zonder_ongeldige_en_ingetrokken_sleutel`: geen kop, `Basic`, onbekende sleutel, één teken anders, sleutel zonder `Bearer`, ingetrokken sleutel → `401 {"fout": "ongeldige_koppelsleutel"}`. |
+| Sleutel eenmalig getoond en alleen als SHA-256-hash opgeslagen | **Gedaan.** `test_sleutel_eenmalig_getoond_en_alleen_als_hash_opgeslagen`: JSON en scherm tonen de sleutel één keer; de tabel bevat alleen hash + voorvoegsel (geen kolom bevat de sleutel); de lijst en het auditlog tonen hem nooit. |
+| 403 `koppeling_uitgeschakeld` vóór alle andere controles | **Gedaan.** `test_403_uitgeschakeld_komt_voor_alle_andere_controles` (zonder sleutel, ongeldige sleutel, geldige sleutel × onbekende dataset en ongeldige parameters). |
+| Paginering met cursor, `sinds`, 404, 422 en 429 (120/min per sleutel) | **Gedaan.** `test_paginering_sinds_404_en_422` (1.360 planningregels in pagina's van 97 = dezelfde, stabiele volgorde; standaard 100; `sinds` morgen/gisteren; een wijziging in één kap geeft met `sinds` alleen die kap terug; 404 vóór 422; 422 voor limiet 0/501/abc, `sinds` zonder tijdzone, foute cursor, onbekende parameter); `test_429_per_sleutel` (limiet per sleutel, `Retry-After`). |
+| Niet-beheerders kunnen geen sleutels beheren | **Gedaan.** `test_niet_beheerders_kunnen_geen_sleutels_beheren`: medewerker en lezer krijgen 403 op lijst, aanmaken, intrekken en de beheerpagina; niet aangemeld 401. |
+| Alleen het vastgestelde scenario wordt gedeeld; KPI's, meldingen en datasets volgen §11.1 | **Gedaan (synthetisch).** `test_info_samenvatting_en_alleen_het_vastgestelde_plan`: de zes KPI's in de volgorde van §11.1 met geldige status (`null` ⇒ `onbekend`), meldingen, de vier datasets met precies de velden uit §11.1; een kopie (concept) wordt nooit gedeeld; zonder vastgesteld plan lege datasets en onbekende KPI's; geen vrije tekst of gebruikersnamen. `energieprognose.dimgewogen_uren` is `null` (B41). |
+| Afnemen uit Gewichtsverwachting: versleutelde bronnen, instelbaar interval, "nu ophalen" | **Gedaan (nep-server).** `test_koppelbron_versleuteld_ophalen_koppelen_en_kalibratie`: sleutel versleuteld opgeslagen (niet leesbaar in de database, wel te ontsleutelen), standaard uit (geen verzoek), na aanzetten *Nu ophalen* → teelten, oogsten, metingen en prognoses met paginering (limiet 500). Interval: `koppeling.ophaalinterval_uren` in de achtergrondtaak. Met de echte Gewichtsverwachting: **wacht op** adres en koppelsleutel van de NAS. |
+| Koppeling op kap + plantdatum ± dagen; niet-gekoppelde teelten in een lijst; niet raden | **Gedaan.** Zelfde test: exact en ± 1 dag gekoppeld; te ver weg, kap zonder planteelt en twee bronteelten op één planteelt staan met reden in de lijst op *Beheer → Koppelingen*. De tolerantie zelf is onbekend (B33). |
+| Gekoppelde teelten voeden de kalibratie | **Gedaan (synthetisch).** Zelfde test: *Kalibreren* maakt LBE-cellen uit `92 g × 50 / lichtsom` van de gekoppelde teelten; de modeltraining telt ze als bron `gewichtsverwachting`. Reactietijd wordt alleen overgenomen als de gerealiseerde oogstdatum is gekozen (B40). |
+| 403 `koppeling_uitgeschakeld` getoond als "staat uit bij de bron (…)", niet als storing | **Gedaan.** `test_403_bij_de_bron_is_staat_uit_geen_storing`: status `uit_bij_bron`, tekst "Staat uit bij de bron (Gewichtsverwachting: Beheer → Bedrijfskoppeling)"; een 401 is wel een fout. |
+| Schakelaar in deze app: "Beheer → Koppelingen → Bedrijfskoppeling"; dashboard niet aangepast | **Gedaan.** Het dashboard is niet aangepast; de plek staat in `docs/koppeling-api.md` (met de opmerking dat de dashboardtabel pas met §11.3 volgt). |
+| Na een schone installatie staan alle externe bronnen en de koppeling uit (test) | **Gedaan.** `test_schone_installatie_alle_externe_bronnen_en_koppeling_uit`: geen enkele bool in *Bronnen* of *Koppeling* staat aan, geen koppelbronnen of sleutels, alle API-routes 403, de achtergrondtaken maken geen verbinding. |
+| `docs/koppeling-api.md` met het app-specifieke deel | **Gedaan.** |
+
+Verder in fase 6: prognose uit Gewichtsverwachting op de teeltpagina naast de planprognose (alleen als die daar
+*gevalideerd* is); CLI `beheer_cli koppelsleutel <naam>`.
+
+### Tests en container fase 6
+
+* `pytest`: 182 geslaagd, 5 overgeslagen (alleen de tests met echte bestanden); `ruff check` en
+  `ruff format --check` schoon. Geen echte netwerkverbindingen (fixture `geen_netwerk`; de koppelbron draait tegen
+  een nep-server).
+* Docker (lokaal, met de proxy-CA alleen als build-secret): image **848 MB** (fase 3: 830 MB; +18 MB vooral
+  `holidays`; het model voegt niets toe). `tests/container_rooktest.py` tegen de container (gebruiker 568,
+  `/health` = 0.7.0): pdf's (1/1/20 pagina's), belichtingsimport, **training in een apart proces in de container**
+  (2.030 teelten, 2,1 s, `/health` bleef antwoorden), schermen Model/Jaar/Scenario's/Afzet/Vergelijken/Koppelingen
+  200, `/api/koppeling/v1/info` → 403 `koppeling_uitgeschakeld`; `/data/tmp` leeg.

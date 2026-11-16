@@ -135,3 +135,23 @@ teeltplanning/
 | Toepassen | Per voorstel een handmatige waarde met reden "zoekvoorstel …" en auditregel; geweigerd als het veld intussen handmatig is | §8.2 punt 3 en §4.2: handmatig wint altijd |
 | Genereren | Alleen in een conceptscenario; schrijft **voorstellen** (met bron en modelversie) in `veldwaarde`, nooit handmatige waarden; alleen in een leeg jaar | het vastgestelde plan blijft ongemoeid; genereren is herhaalbaar in een nieuwe kopie |
 | kWh per scenario | Alleen de dagen waarop er een teelt in de kap staat (plantdatum t/m de dag vóór de oogst) | de vergelijking moet laten zien wat een ander plan aan stroom kost |
+
+## Fase 6: koppelingen
+
+```
+teeltplanning/
+  koppeling.py              # Bedrijfskoppeling API v1 aanbieden + sleutelbeheer (JSON)
+  bronnen/koppelbronnen.py  # afnemen: ophalen, koppelen, waarnemingen, prognose
+  bronnen/http.py           # + JSON-foutantwoord in BronFout (voor 403 koppeling_uitgeschakeld)
+  web/routes_koppeling.py   # Beheer → Koppelingen
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Contract | Overgenomen uit Gewichtsverwachting (`app/koppeling.py`): zelfde sleutelopbouw, hash-lookup + `compare_digest`, snelheidsgrens in het geheugen (één proces) | §11, "volg de bestaande apps" |
+| Parameters | `sinds`, `limiet` en `cursor` worden in de route zelf gelezen, ná de 404-controle | anders geeft FastAPI 422 vóór 404 en komt de fout niet in het contractformaat |
+| Cursor | Opaak: base64 van de sorteersleutel van het laatste item | ook voor datasets zonder numeriek id (week, week-kap) |
+| `bijgewerkt_op` | Afgeleide waarden hebben geen eigen wijzigtijd: per kap de laatste teelt-/veldwijziging, plus de laatste plan-brede wijziging | een wijziging schuift de hele keten; liever iets te veel dan iets missen met `sinds` |
+| Itemcache | Items per dataset bewaard tot het plan of een instelling verandert | een afnemer haalt alle pagina's achter elkaar op; zonder cache rekent elke pagina opnieuw |
+| Afnemen | Eén HTTP-laag (`bronnen/http.py`, standaardbibliotheek) en dezelfde Fernet-kluis als de weerbronnen; volledige verversing per dataset | geen `httpx` in de image nodig; de datasets zijn klein |
+| Koppelen | Alleen eenduidig (precies één kandidaat binnen de tolerantie, één-op-één); de rest in een lijst | §11.2: niet raden |
