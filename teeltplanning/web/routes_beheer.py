@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from .. import auth, instellingen, mfa, onderhoud
 from ..backups import VOORVOEGSEL, maak_backup, zet_herstel_klaar
 from ..db.basis import DATA_DIR, Base, get_db
-from ..db.modellen import Audit, Gebruiker, Instelling, Kap, Ras
+from ..db.modellen import Audit, Gebruiker, Instelling, Kap, Lampgroep, ParameterLbe, Ras
 from .sjablonen import templates
 
 router = APIRouter(prefix="/beheer")
@@ -140,17 +140,63 @@ async def instellingen_import(bestand: UploadFile, reden: str = Form("import ins
 TABELLEN = {
     "kappen": (Kap, ["nummer", "vakgroep", "oppervlak_m2", "plantvolgorde", "wisseltijd_dagen", "actief"], "nummer"),
     "rassen": (Ras, ["code", "naam", "doelgewicht_g", "temperatuurgevoeligheid_dagen_per_graad", "actief"], "code"),
+    "lampgroepen": (
+        Lampgroep,
+        [
+            "naam",
+            "type",
+            "kap",
+            "intensiteit_umol",
+            "rendement_umol_per_j",
+            "kw_per_kap",
+            "dimbaar",
+            "module_van",
+            "module_tot",
+            "geldig_vanaf",
+            "geldig_tot",
+            "status",
+            "opmerking",
+            "actief",
+        ],
+        "naam",
+    ),
+    "lbe": (
+        ParameterLbe,
+        ["ras", "plantweek", "lichtregime", "lbe_g_per_mol", "aantal_waarnemingen", "status", "bron"],
+        ("ras", "plantweek", "lichtregime"),
+    ),
 }
 TYPEN = {"nummer": int, "plantvolgorde": int, "wisseltijd_dagen": int, "oppervlak_m2": float, "doelgewicht_g": float,
-         "temperatuurgevoeligheid_dagen_per_graad": float}  # fmt: skip
+         "temperatuurgevoeligheid_dagen_per_graad": float, "kap": int, "intensiteit_umol": float,
+         "rendement_umol_per_j": float, "kw_per_kap": float, "module_van": int, "module_tot": int, "plantweek": int,
+         "lbe_g_per_mol": float, "aantal_waarnemingen": int}  # fmt: skip
+DATUMKOLOMMEN = {"geldig_vanaf", "geldig_tot"}
+BOOLKOLOMMEN = {"actief", "dimbaar"}
+KEUZES = {"type": ("led", "son_t"), "status": ("bevestigd", "indicatief", "onvoldoende", "gevalideerd")}
+STANDAARD = {"lichtregime": "", "aantal_waarnemingen": 0}  # lege cel → deze waarde (kolom is niet nullable)
+
+
+def _sleutel(rij, sleutel) -> object:
+    return tuple(getattr(rij, k) for k in sleutel) if isinstance(sleutel, tuple) else getattr(rij, sleutel)
+
+
+def _volgorde(model, sleutel):
+    return [getattr(model, k) for k in sleutel] if isinstance(sleutel, tuple) else [getattr(model, sleutel)]
 
 
 def _cel(kolom: str, tekst: str):
     tekst = (tekst or "").strip()
-    if kolom == "actief":
+    if kolom in BOOLKOLOMMEN:
         return tekst.lower() in ("1", "ja", "aan", "true", "waar", "on")
     if tekst == "":
-        return None
+        return STANDAARD.get(kolom)
+    if kolom in DATUMKOLOMMEN:
+        try:
+            return date.fromisoformat(tekst)
+        except ValueError as exc:
+            raise ValueError(f"{kolom}: gebruik JJJJ-MM-DD (of leeg = onbekend)") from exc
+    if kolom in KEUZES and tekst not in KEUZES[kolom]:
+        raise ValueError(f"{kolom}: kies uit {', '.join(KEUZES[kolom])}")
     if kolom in TYPEN:
         try:
             waarde = TYPEN[kolom](tekst.replace(",", "."))
@@ -159,7 +205,7 @@ def _cel(kolom: str, tekst: str):
         if waarde < 0:
             raise ValueError(f"{kolom}: mag niet negatief zijn")
         return waarde
-    return tekst[:100]
+    return tekst[:2000] if kolom == "opmerking" else tekst[:100]
 
 
 @router.get("/tabel/{tabel}")
@@ -168,7 +214,7 @@ def tabel_pagina(request: Request, tabel: str, melding: str | None = None, gebru
     if tabel not in TABELLEN:
         raise HTTPException(404)
     model, kolommen, sleutel = TABELLEN[tabel]
-    rijen = db.scalars(select(model).order_by(getattr(model, sleutel))).all()
+    rijen = db.scalars(select(model).order_by(*_volgorde(model, sleutel))).all()
     return templates.TemplateResponse(request, "beheer/tabel.html", {
         "gebruiker": gebruiker, "tabel": tabel, "kolommen": kolommen, "rijen": rijen, "melding": melding,
         "csv": _tabel_csv(rijen, kolommen),
@@ -190,7 +236,7 @@ def tabel_export(tabel: str, gebruiker: Gebruiker = Depends(auth.vereis_lezen), 
     if tabel not in TABELLEN:
         raise HTTPException(404)
     model, kolommen, sleutel = TABELLEN[tabel]
-    rijen = db.scalars(select(model).order_by(getattr(model, sleutel))).all()
+    rijen = db.scalars(select(model).order_by(*_volgorde(model, sleutel))).all()
     return Response("﻿" + _tabel_csv(rijen, kolommen), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{tabel}.csv"'})  # fmt: skip
 
@@ -207,25 +253,32 @@ def tabel_import(tabel: str, csv_tekst: str = Form(..., max_length=500_000), red
         kop = [k.strip() for k in next(lezer)]
         if kop != kolommen:
             raise ValueError(f"kopregel moet zijn: {';'.join(kolommen)}")
-        bestaand = {getattr(r, sleutel): r for r in db.scalars(select(model))}
+        bestaand = {_sleutel(r, sleutel): r for r in db.scalars(select(model))}
         wijzigingen = []
         for nummer, velden in enumerate(lezer, 2):
             if not any(v.strip() for v in velden):
                 continue
             waarden = {k: _cel(k, v) for k, v in zip(kolommen, velden, strict=False)}
-            if waarden.get(sleutel) in (None, ""):
-                raise ValueError(f"regel {nummer}: {sleutel} ontbreekt")
-            rij = bestaand.get(waarden[sleutel])
+            sleutels = sleutel if isinstance(sleutel, tuple) else (sleutel,)
+            if any(waarden.get(k) is None or (waarden.get(k) == "" and k not in STANDAARD) for k in sleutels):
+                raise ValueError(f"regel {nummer}: {', '.join(sleutels)} ontbreekt")
+            rij = bestaand.get(tuple(waarden[k] for k in sleutels) if isinstance(sleutel, tuple) else waarden[sleutel])
             if rij is None:
                 rij = model(**waarden)
                 db.add(rij)
-                wijzigingen.append({"nieuw": {k: v for k, v in waarden.items()}})
+                bestaand[_sleutel(rij, sleutel)] = rij
+                wijzigingen.append({"nieuw": {k: _json(v) for k, v in waarden.items()}})
             else:
                 oud = {k: getattr(rij, k) for k in kolommen}
                 if oud != waarden:
                     for k, v in waarden.items():
                         setattr(rij, k, v)
-                    wijzigingen.append({"oud": oud, "nieuw": waarden})
+                    wijzigingen.append(
+                        {
+                            "oud": {k: _json(v) for k, v in oud.items()},
+                            "nieuw": {k: _json(v) for k, v in waarden.items()},
+                        }
+                    )
         if wijzigingen:
             auth.audit(db, gebruiker, f"{tabel}_gewijzigd", tabel, {"wijzigingen": wijzigingen, "reden": reden or None})
         db.commit()
@@ -233,6 +286,10 @@ def tabel_import(tabel: str, csv_tekst: str = Form(..., max_length=500_000), red
         db.rollback()
         return _terug(f"/beheer/tabel/{tabel}", f"Niet opgeslagen: {fout}")
     return _terug(f"/beheer/tabel/{tabel}", f"{len(wijzigingen)} regel(s) gewijzigd; het plan is opnieuw doorgerekend.")
+
+
+def _json(waarde):
+    return waarde.isoformat() if isinstance(waarde, date) else waarde
 
 
 # --- Gebruikers ---------------------------------------------------------------------------------------------

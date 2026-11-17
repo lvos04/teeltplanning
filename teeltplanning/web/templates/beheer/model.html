@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block titel %}Model{% endblock %}
+{% block inhoud %}
+<h1>Voorstellen met model</h1>
+<p>De voorstellen voor LD-dagen, verlenging, reactietijd en gewicht komen uit een <strong>voorstelladder</strong> (BOUWPLAN §6.7 en §8.3):
+seizoensbasis → LBE-identiteit → ridge → bomen met monotone beperkingen (reactietijd: seizoensbasis → temperatuurcorrectie).
+Een hogere trede wordt alleen gebruikt als hij in de <strong>voortschrijdende backtest</strong> (trainen t/m jaar N, toetsen op N+1) de seizoensbasis verslaat;
+dan heet hij <em>gevalideerd</em>. Anders blijft het voorstel <em>indicatief</em> op de seizoensbasis. Alles rekent op de processor (geen GPU), in een apart proces op de achtergrond.</p>
+{% if gebruiker.rol == 'beheerder' %}
+<form method="post" action="/beheer/model/trainen" class="formulier">
+  <button {% if bezig %}disabled title="er loopt al een training"{% endif %}>Nu trainen en toetsen</button>
+  {% if bezig %}<span class="hulp">Training {{ bezig.versie }} loopt sinds {{ bezig.gestart_op|tijd }}; de app blijft bruikbaar.</span>{% endif %}
+</form>
+<p class="hulp">Instellingen: <a href="/beheer/instellingen?groep=Voorstellen">Voorstellen</a> en <a href="/beheer/instellingen?groep=Model">Model</a>. Wijzigingen daarin gelden na opnieuw trainen; de schakelaars per veld gelden direct.</p>
+{% endif %}
+
+<h2>Versies</h2>
+{% if versies %}
+<table class="lijst"><thead><tr><th>versie</th><th>status</th><th>gestart</th><th>klaar</th><th>teelten</th><th>melding</th></tr></thead><tbody>
+{% for v in versies %}<tr class="{% if gekozen and v.id == gekozen.id %}gekozen{% endif %}"><td><a href="/beheer/model?versie={{ v.id }}">{{ v.versie }}</a>{% if actief and v.id == actief.id %} <strong>(actief)</strong>{% endif %}</td>
+<td>{{ v.status }}</td><td>{{ v.gestart_op|tijd }}</td><td>{{ v.klaar_op|tijd }}</td><td>{{ v.aantal_waarnemingen if v.aantal_waarnemingen is not none else '' }}</td><td>{{ v.melding or '' }}</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p>Nog niet getraind: er zijn nog geen modelvoorstellen. Zonder training blijven LD-dagen, verlenging en reactietijd zonder voorstel en komt het gewicht uit de LBE-berekening.</p>{% endif %}
+
+{% if gekozen and gekozen.herkomst %}
+<h2>Historie van {{ gekozen.versie }}</h2>
+<p>{% for bron, n in gekozen.herkomst.items() %}{{ bron|replace('_', ' ') }}: {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+
+{% if tabellen %}
+<h2>Backtest {{ gekozen.versie }}</h2>
+<p class="hulp">Gemiddelde absolute fout per toetsjaar. "Basis" = de fout van de seizoensbasis op dezelfde toetsteelten. Band = backtestfouten (onder- en bovenpercentiel) rond de puntschatting.</p>
+{% for t in tabellen %}
+<h3>{{ t.doel }} <small>gekozen trede: {{ t.gekozen }}</small></h3>
+<div class="scroll"><table class="lijst backtest">
+<thead><tr><th>trede</th><th>status</th><th>toetsteelten</th><th>fout</th><th>basis</th><th>verbetering</th>{% for j in t.jaren %}<th>{{ j }}</th>{% endfor %}<th>reden</th></tr></thead>
+<tbody>
+{% for r in t.regels %}<tr class="{% if r.gekozen %}gekozen{% endif %}">
+<td>{{ r.trede }}{% if r.gekozen %} ✓{% endif %}</td><td class="status-{{ r.status }}">{{ status_label[r.status] }}</td><td>{{ r.n }}</td>
+<td>{{ r.mae|getal(2, '—') }} {% if r.mae is not none %}{{ t.eenheid }}{% endif %}</td><td>{{ r.mae_basis|getal(2, '—') }}</td>
+<td>{% if r.verbetering is not none %}{{ r.verbetering|getal(1) }}%{% else %}—{% endif %}</td>
+{% for j in t.jaren %}{% set jr = r.jaren.get(j) %}<td>{% if jr %}{{ jr.mae|getal(2, '—') }} <small>(n {{ jr.n }})</small>{% else %}—{% endif %}</td>{% endfor %}
+<td>{{ r.reden or '' }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endfor %}
+{% endif %}
+{% endblock %}

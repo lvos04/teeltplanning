@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import event, select
@@ -18,8 +18,27 @@ from sqlalchemy.orm import Session
 
 from . import instellingen
 from .auth import audit
-from .db.modellen import Gebruiker, Instelling, Kap, Ronde, Scenario, Teelt, Veldwaarde, utcnu
+from .db.modellen import (
+    BelichtingDag,
+    BelichtingWeek,
+    Gebruiker,
+    Instelling,
+    Kap,
+    Lampgroep,
+    Modelversie,
+    ParameterLbe,
+    Ras,
+    Ronde,
+    Scenario,
+    Teelt,
+    Veldwaarde,
+    Weeknormaal,
+    Weerdag,
+    utcnu,
+)
 from .kern import bereken_plan
+from .kern import gewas as kern_gewas
+from .kern import licht as kern_licht
 from .kern.kalender import lees_week_dag
 from .kern.typen import (
     DATUMVELDEN,
@@ -35,6 +54,8 @@ from .kern.typen import (
     Uitvalregel,
     Veld,
 )
+
+DAGEN_PER_WEEK = 7
 
 
 class Ongeldig(ValueError):
@@ -54,7 +75,22 @@ class _Versie:
 
 VERSIE = _Versie()
 _cache: dict[int, tuple[int, Any]] = {}
-_RELEVANT = (Teelt, Veldwaarde, Kap, Ronde, Scenario, Instelling)
+_RELEVANT = (
+    Teelt,
+    Veldwaarde,
+    Kap,
+    Ronde,
+    Scenario,
+    Instelling,
+    Lampgroep,
+    Weerdag,
+    Weeknormaal,
+    BelichtingDag,
+    BelichtingWeek,
+    ParameterLbe,
+    Ras,
+    Modelversie,
+)
 
 
 @event.listens_for(Session, "after_flush")
@@ -123,6 +159,94 @@ def kern_instellingen(snap: instellingen.Snapshot) -> KernInstellingen:
     )
 
 
+# --- Licht en gewas (fase 3) ----------------------------------------------------------------------------------
+ZON_VOORRANG = {"gemeten": 0, "historie": 1}  # meting (KNMI) gaat voor historie (Open-Meteo ERA5)
+
+
+def licht_invoer(db: Session, snap: instellingen.Snapshot, vandaag: date) -> kern_licht.LichtInvoer:
+    zon: dict[date, kern_licht.Zondag] = {}
+    verwachting_tot = vandaag + timedelta(days=snap["licht.verwachting_dagen"])
+    for datum, soort, straling in db.execute(select(Weerdag.datum, Weerdag.soort, Weerdag.straling_j_cm2)):
+        if straling is None:
+            continue
+        if soort in ZON_VOORRANG and datum < vandaag:
+            huidig = zon.get(datum)
+            if huidig is None or ZON_VOORRANG[soort] < ZON_VOORRANG.get(huidig.soort, len(ZON_VOORRANG)):
+                zon[datum] = kern_licht.Zondag(straling, soort)
+        elif soort == "verwachting" and vandaag <= datum < verwachting_tot:
+            zon[datum] = kern_licht.Zondag(straling, soort)
+    normaal = {}
+    for n in db.scalars(select(Weeknormaal)):
+        if n.p50 is not None:
+            normaal[n.week] = kern_licht.Zondag(n.p50 / DAGEN_PER_WEEK, "normaal",
+                                                None if n.p10 is None else n.p10 / DAGEN_PER_WEEK,
+                                                None if n.p90 is None else n.p90 / DAGEN_PER_WEEK)  # fmt: skip
+    dag_uren: dict[tuple[int, date], tuple[float | None, bool]] = {}
+    som_week: dict[tuple[int, int], list[float]] = {}
+    for module, datum, uren, volledig in db.execute(
+        select(BelichtingDag.module, BelichtingDag.datum, BelichtingDag.dimgewogen_uren, BelichtingDag.volledig)
+    ):
+        dag_uren[(module, datum)] = (uren, bool(volledig))
+        if volledig and uren is not None:
+            som_week.setdefault((module, datum.isocalendar().week), []).append(uren)
+    week_uren = {}
+    for module, jaar, week, uren in db.execute(select(BelichtingWeek.module, BelichtingWeek.iso_jaar, BelichtingWeek.week,
+                                                      BelichtingWeek.uren)):  # fmt: skip
+        week_uren[(module, jaar, week)] = uren
+        if uren is not None:
+            som_week.setdefault((module, week), []).extend([uren / DAGEN_PER_WEEK] * DAGEN_PER_WEEK)
+    normaal_uren = {sleutel: sum(w) / len(w) for sleutel, w in som_week.items()}
+    groepen = tuple(
+        kern_licht.Lampgroep(
+            g.naam,
+            g.intensiteit_umol,
+            g.kw_per_kap,
+            g.dimbaar,
+            g.module_van,
+            g.geldig_vanaf,
+            g.geldig_tot,
+            g.kap,
+            g.status,
+        )  # fmt: skip
+        for g in db.scalars(select(Lampgroep).where(Lampgroep.actief.is_(True)).order_by(Lampgroep.id))
+    )
+    return kern_licht.LichtInvoer(
+        zon=zon, dag_uren=dag_uren, week_uren=week_uren, normaal_uren=normaal_uren, lampgroepen=groepen,
+        peildatum=vandaag, par_factor=snap["licht.straling_naar_par"], transmissie=tuple(snap.reeks("licht.transmissie")),
+        toekomst_branduren=snap["licht.bron_toekomstige_branduren"],
+        onvolledig_is_ontbrekend=snap["licht.onvolledige_belichtingsdag"] == "ontbrekend",
+        weekuren_verdelen=bool(snap["licht.weekuren_verdelen"]),
+        prijs=tuple(snap.reeks("energie.stroomprijs_eur_per_mwh")), opslagen=tuple(snap.reeks("energie.opslagen_eur_per_mwh")),
+        zon_normaal=normaal,
+    )  # fmt: skip
+
+
+def gewas_invoer(db: Session, snap: instellingen.Snapshot) -> kern_gewas.GewasInvoer:
+    lbe = {(p.ras, p.plantweek, p.lichtregime or ""): kern_gewas.LbeCel(p.lbe_g_per_mol, p.aantal_waarnemingen, p.status)
+           for p in db.scalars(select(ParameterLbe))}  # fmt: skip
+    reeks = []
+    for waarde in snap["gewas.dichtheid_reeks"] or []:
+        try:
+            reeks.append(float(str(waarde).replace(",", ".")))
+        except ValueError:
+            continue
+    return kern_gewas.GewasInvoer(
+        lbe=lbe, doelgewicht={r.code: r.doelgewicht_g for r in db.scalars(select(Ras))},
+        min_waarnemingen=snap["gewas.min_waarnemingen_lbe"], venster_weken=snap["voorstel.seizoensvenster_weken"],
+        dichtheid_reeks=tuple(sorted(reeks)),
+        lichtregimes=tuple((r["naam"], r["umol_van"], r["umol_tot"]) for r in snap["gewas.lichtregimes"] or []),
+    )  # fmt: skip
+
+
+def voorspeller(db: Session, snap: instellingen.Snapshot):
+    """De voorstelladder uit de actieve modelversie (fase 4); None zolang er niet getraind is."""
+    from .voorstel import dienst, historie
+
+    temperaturen = historie.Temperaturen(historie.dagtemperaturen(db, verwachting=True)) if snap[
+        "voorstel.temperatuurcorrectie"] else None  # fmt: skip
+    return dienst.voorspeller(db, snap, temperaturen)
+
+
 @dataclass
 class Geladen:
     scenario: Scenario
@@ -156,17 +280,28 @@ def laad(db: Session, scenario_id: int) -> Geladen:
             if v is not None:
                 velden[naam] = Veld(voorstel=uit_json(naam, v.voorstel), handmatig=uit_json(naam, v.handmatig))
         invoer.append(
-            TeeltInvoer(id=t.id, kap=t.kap, ronde=rondes[t.ronde_id].nummer, volgnummer=t.volgnummer, velden=velden)
+            TeeltInvoer(
+                id=t.id,
+                kap=t.kap,
+                ronde=rondes[t.ronde_id].nummer,
+                volgnummer=t.volgnummer,
+                velden=velden,
+                rassen=tuple((r.code, r.bedden) for r in t.rassen),
+            )  # fmt: skip
         )
+    vandaag = date.today()
     parameters = Parameters(
         kappen={k.nummer: KapInvoer(k.nummer, k.oppervlak_m2, k.wisseltijd_dagen, k.actief) for k in kappen.values()},
         instellingen=kern_instellingen(snap),
+        licht=licht_invoer(db, snap, vandaag),
+        gewas=gewas_invoer(db, snap),
+        voorspeller=voorspeller(db, snap),
     )
     return Geladen(scenario, rondes, teelten, veldwaarden, kappen, PlanInvoer(tuple(invoer)), parameters, snap)
 
 
 def bereken(db: Session, scenario_id: int) -> tuple[Geladen, Plan]:
-    versie = VERSIE.nummer
+    versie = (VERSIE.nummer, date.today())  # de peildatum (verleden/toekomst) verschuift elke dag
     gecacht = _cache.get(scenario_id)
     if gecacht and gecacht[0] == versie:
         return gecacht[1]

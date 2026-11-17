@@ -265,14 +265,13 @@ def teelt_pagina(
     geladen, plan = bereken(db, ronde.scenario_id)
     u = plan.teelten[teelt.id]
     velden = []
+    voorspeller = geladen.parameters.voorspeller
     for naam in VELDEN:
         v = geladen.veldwaarden.get((teelt.id, naam))
         door = db.get(Gebruiker, v.gewijzigd_door) if v and v.gewijzigd_door else None
         velden.append({
             "naam": naam, "label": LABELS[naam], "voorstel": _veldtekst(naam, u.voorstel[naam]),
-            "voorstel_bron": ("keten (oogst vorige teelt + wisseltijd)" if naam == "plantdatum" and u.voorstel[naam] and not (v and v.voorstel)
-                              else "tabel uitval per oogstweek" if naam == "uitval" and u.voorstel[naam] and not (v and v.voorstel)
-                              else (v.bron if v and v.voorstel is not None else "")),
+            "uitleg": uitleg(naam, u, v, voorspeller, teelt) if u.voorstel[naam] is not None else None,
             "handmatig": _veldtekst(naam, u.effectief[naam]) if u.bron[naam] == "handmatig" else "",
             "effectief": _veldtekst(naam, u.effectief[naam]), "bron": u.bron[naam],
             "wijziging": v, "door": door.gebruikersnaam if door else None,
@@ -285,6 +284,51 @@ def teelt_pagina(
         "gebruiker": gebruiker, "teelt": teelt, "ronde": ronde, "u": u, "velden": velden, "bewijs": bewijs, "batch": batch,
         "kan_schrijven": gebruiker.rol in ("beheerder", "medewerker"),
     })  # fmt: skip
+
+
+def _band(naam: str, laag, hoog) -> str | None:
+    if laag is None or hoog is None:
+        return None
+    if naam in ("ld_dagen", "verlenging", "reactietijd"):
+        return f"{getal(laag, 1)} – {getal(hoog, 1)} dagen"
+    if naam == "gewicht":
+        return f"{getal(laag, 1)} – {getal(hoog, 1)} g"
+    return f"{getal(laag, 2)} – {getal(hoog, 2)}"
+
+
+def uitleg(naam: str, u, v, voorspeller, teelt) -> dict:
+    """Vaste zinnen bij een voorstel (§8.3): bron, bandbreedte, modelversie, status en drie vergelijkbare teelten."""
+    toelichting = u.toelichting.get(naam)
+    plant = u.effectief["plantdatum"]
+    kenmerken = {"lichtsom": u.lichtsom.totaal if u.lichtsom else None, "dichtheid": u.effectief["dichtheid"]}
+    if toelichting is not None:
+        return {"bron": toelichting.bron, "band": _band(naam, toelichting.ondergrens, toelichting.bovengrens),
+                "modelversie": toelichting.modelversie, "status": toelichting.status,
+                "vergelijkbaar": toelichting.vergelijkbaar, "geen_vergelijkbaar": None}  # fmt: skip
+    vergelijkbaar, geen = (), None
+    if naam in ("plantdatum", "tussenlicht", "tussenlicht_dagen"):
+        geen = "n.v.t.: dit voorstel is een rekenregel, geen schatting uit eerdere teelten"
+    elif voorspeller is not None and plant is not None:
+        vergelijkbaar = voorspeller.vergelijkbaar_voor(
+            naam, tuple((r.code, r.bedden) for r in teelt.rassen), plant, kenmerken
+        )
+    else:
+        geen = "nog geen getraind model (Beheer → Model)"
+    if v is not None and v.voorstel is not None:
+        return {"bron": f"Opgeslagen voorstel ({v.bron or 'bron onbekend'}).", "band": _band(naam, v.ondergrens, v.bovengrens),
+                "modelversie": v.modelversie, "status": "indicatief", "vergelijkbaar": vergelijkbaar, "geen_vergelijkbaar": geen}  # fmt: skip
+    lbe_status = (u.lbe.status if u.lbe else None) or "onbekend"
+    zinnen = {
+        "plantdatum": "Keten: oogst van de vorige teelt in deze kap + wisseltijd, afgerond naar een toegestane plantdag.",
+        "uitval": "Tabel uitval per oogstweek (Beheer → Instellingen → Gewas).",
+        "dichtheid": f"LBE × lichtsom / doelgewicht, afgerond op de praktijkdichtheden (niet afgerond "
+                     f"{getal(u.dichtheid_onafgerond, 1)}); LBE {lbe_status}.",
+        "gewicht": f"LBE × lichtsom / dichtheid; LBE {lbe_status}.",
+    }  # fmt: skip
+    band = _band(naam, *u.gewicht_band) if naam == "gewicht" else None
+    return {"bron": zinnen.get(naam, "Rekenregel."), "band": band, "modelversie": None,
+            "status": "gevalideerd" if naam == "plantdatum" else "indicatief" if naam != "dichtheid" else lbe_status,
+            "vergelijkbaar": vergelijkbaar, "geen_vergelijkbaar": geen}  # fmt: skip
 
 
 @router.post("/teelt/{teelt_id}/veld/{veld}")

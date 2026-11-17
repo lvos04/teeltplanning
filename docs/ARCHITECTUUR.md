@@ -67,3 +67,49 @@ teeltplanning/
 | Celtoewijzing | Rondeblad = kolomtoewijzing van de importer; teeltkaart = eigen toewijzing in het register, tweede kaart = verschuiving in kolommen | importeren en afdrukken gebruiken dezelfde cellen; Leon kan een verplaatste cel zelf aanpassen |
 | Netwerk bij conversie | `unshare -rn` als het mag, anders een proxy naar `127.0.0.1:9`; externe koppelingen zitten niet in de kopie | in de container (Docker-standaardprofiel) is een eigen netwerknaamruimte niet toegestaan |
 | Controle tegen het werkboek | Het werkboek zelf door LibreOffice laten herberekenen (met `fullCalcOnLoad` en een profiel dat altijd herberekent) | een onafhankelijke rekenweg; geen eigen formule-interpreter |
+
+## Fase 3: licht, energie en dichtheid
+
+```
+teeltplanning/
+  kern/licht.py        # lichtsom (Rekenaar met prefixsommen per kap), lampgroepen, weeknormalen
+  kern/energie.py      # kWh, kosten, per kap per week, scenariovergelijking
+  kern/gewas.py        # + LBE-keuze, dichtheidsvoorstel, takgewicht, afronden
+  voorstel/lbe.py      # kalibratie parameter_lbe, dichtheidsreeks uit de historie, ijkpunten belichtingsblad
+  importers/duur.py, belichting.py, belichting_dienst.py   # §7.2, achtergrondtaak
+  bronnen/http.py, open_meteo.py, knmi.py, energyzero.py, kluis.py, dienst.py
+  web/routes_licht.py
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Prijsscenario (§5 `prijsscenario`) | De instellingen *Stroomprijs voor de planning* en *Opslagen en belasting* **met ingangsdatum** vormen samen het prijsscenario per periode; geen aparte tabel | het register heeft al reeksen met ingangsdatum, audit en export |
+| Lampgroep ↔ kap | Eén regel per groep met `kap` leeg (= alle kappen) en `module_van`; module voor kap k = module_van + k − 1. Een regel voor één kap kan ook | 40 regels per groep is onnodig; afwijkende kappen blijven mogelijk |
+| Onbekende periode | `geldig_vanaf` leeg = onbekend: de groep maakt de lichtsom onbekend in plaats van te worden genegeerd | niets verzinnen (§0.2) |
+| EnergyZero | De openbare prijzen-API rechtstreeks via `bronnen/http.py` in plaats van het pakket `energyzero` | het pakket is async (aiohttp); zo één HTTP-laag met één nep-HTTP-testpunt en geen extra afhankelijkheden |
+| KNMI | Alleen sleutel (versleuteld) en verbindingstest; waarden inlezen staat uit | variabele, eenheid en formaat (NetCDF 4) niet geverifieerd (B23); geen NetCDF-lezer in de image |
+| Geheimen | Fernet met `DATA_DIR/geheim.key`, zoals het Bedrijfsdashboard | sleutels nooit in het register, de export of het auditlog |
+| Belichtingsimport | Lezen als achtergrondtaak (één tegelijk); de dagaggregaten als JSON naast het origineel; alleen de laatst gestarte leesbeurt mag het voorbeeld schrijven | het tabblad data is groot; bevestigen hoeft het niet opnieuw te lezen |
+| Rekentijd | Per kap prefixsommen over het hele plan; snelle weg voor het gewone geval (verleden, volledige dagdata); een globale controle slaat het dagwerk over als alles toch onbekend is | hele plan met licht < 200 ms (test) |
+
+## Fase 4: voorstellen met model
+
+```
+teeltplanning/
+  kern/typen.py        # + Voorspelling, Vergelijkbaar, protocol Voorspeller; Parameters.voorspeller
+  kern/keten.py        # roept de voorspeller aan voor LD-dagen, verlenging, reactietijd (na de plantdatum)
+  kern/plan.py         # gewicht uit de voorspeller, anders de LBE-berekening van fase 3
+  voorstel/model.py    # zuivere Python: seizoensbasis, LBE-trede, ridge, bomen, backtest, train(), Voorspeller
+  voorstel/historie.py # afgesloten teelten uit plan, teeltschema (en fase 6: Gewichtsverwachting)
+  voorstel/dienst.py   # achtergrondtraining (thread + apart proces), actieve versie, automatisch hertrainen
+  web/routes_model.py  # Beheer → Model
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Model zonder extra pakketten | Ridge (gesloten vorm met Gauss-eliminatie) en de bomen (boosting met stompjes en monotone beperkingen) in **zuivere Python**; geen numpy, scipy, scikit-learn, torch of GPU | De historie is klein (honderden tot enkele duizenden teelten, ≤ 15 kenmerken): een backtest over alle jaren duurt seconden. numpy + scipy + scikit-learn zouden de image met ±150 MB laten groeien (nu 830 MB) voor rekenwerk dat hier in een paar honderd regels past; de code is deterministisch, volledig getest (ridge vindt een bekend lineair verband, bomen zijn aantoonbaar monotoon) en heeft geen native afhankelijkheden. Overstappen op scikit-learn (`Ridge`, `HistGradientBoostingRegressor(monotonic_cst=…)`) is een lokale wijziging in `voorstel/model.py` als de historie veel groter wordt. Afwijking van §8.3, dat scikit-learn noemt. |
+| Training blokkeert de webapp niet | Gegevens verzamelen in een achtergrondthread; de backtest in een **apart proces** (`multiprocessing` met `spawn`, één tegelijk, tijdslimiet) | Een zuivere-Pythonberekening in dezelfde interpreter deelt de GIL met de webverzoeken; een apart proces niet. De webapp krijgt alleen de parameters terug en hoeft zelf niets te fitten. |
+| Modelversie | Tabel `modelversie` met het hele artefact als JSON: de waarnemingen, de instellingen waarmee getoetst is, de backtest en de parameters van ridge en bomen | Elk voorstel is herleidbaar tot één versie; de drie vergelijkbare teelten worden deterministisch uit die versie bepaald (zelfde versie + zelfde invoer = zelfde uitleg) |
+| Live voorstellen | Berekend in `bereken_plan` (geen opgeslagen voorstel), zodat een verschoven plantdatum direct een ander seizoensvoorstel geeft | §4.1: afgeleide waarden worden berekend; een opgeslagen voorstel (import) gaat wel voor |
+| Instellingen en training | Venster, percentielen, treden, kenmerken en hyperparameters gelden **na opnieuw trainen** (staan in het artefact); de schakelaars per veld gelden direct | De backtest hoort bij precies de instellingen waarmee voorspeld wordt |
+| Leren van eigen voorstellen | Alleen handmatige/geïmporteerde waarden en gerealiseerde gewichten tellen als waarneming | Anders versterkt het model zichzelf |

@@ -5,6 +5,10 @@
   {% if gebruiker.rol == 'beheerder' %}<li><a href="/beheer/instellingen">Instellingen</a><span>alle rekenwaarden, drempels, lijsten en regels</span></li>{% endif %}
   <li><a href="/beheer/tabel/kappen">Kappen</a><span>vakgroep, oppervlak, plantvolgorde, wisseltijd, actief</span></li>
   <li><a href="/beheer/tabel/rassen">Rassen</a><span>code, naam, doelgewicht</span></li>
+  <li><a href="/beheer/tabel/lampgroepen">Lampgroepen</a><span>type, intensiteit, kW per kap, modules, geldig vanaf/tot</span></li>
+  <li><a href="/beheer/lbe">LBE en dichtheid</a><span>LBE-tabel, kalibratie, ijkpunten belichtingsblad, dichtheidsreeks</span></li>
+  <li><a href="/beheer/model">Model</a><span>voorstelladder, trainen op de achtergrond, backtestuitkomsten</span></li>
+  {% if gebruiker.rol == 'beheerder' %}<li><a href="/beheer/bronnen">Bronnen</a><span>weer (Open-Meteo, KNMI), stroomprijzen; standaard uit</span></li>{% endif %}
   {% if gebruiker.rol == 'beheerder' %}
   <li><a href="/beheer/sjabloon">Sjabloon</a><span>werkboek als afdruksjabloon, lettertypen, controleafdruk</span></li>
   <li><a href="/beheer/gebruikers/lijst">Gebruikers</a><span>rollen beheerder, medewerker, lezer</span></li>
@@ -13,5 +17,5 @@
   {% endif %}
   <li><a href="/beheer/mfa">Tweestapsverificatie</a><span>authenticator-app koppelen</span></li>
 </ul>
-<p class="hulp">Lampgroepen, parameters, afzetmomenten, prijzen, bronnen en koppelingen volgen in latere fasen.</p>
+<p class="hulp">Afzetmomenten en koppelingen volgen in latere fasen. Prijzen staan bij Instellingen → Energie.</p>
 {% endblock %}

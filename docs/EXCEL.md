@@ -110,3 +110,23 @@ worden opnieuw gezet). Formules in de af te drukken bladen worden vervangen door
 *Formules die de app niet vult*). Vóór de conversie worden richting, papierformaat en "passend op één pagina" in het
 blad gezet en pagina-einden verwijderd. Een datum gaat als Excel-datum naar een cel met datumnotatie, anders als
 `w-d`-tekst. Het rondeblad gebruikt dezelfde kolomtoewijzing als de importer.
+
+## Importer `Belichting winterronde` (fase 3)
+
+Code: `teeltplanning/importers/belichting.py` (alleen lezen), `duur.py` (duurcellen, uit proef 1),
+`belichting_dienst.py` (importstroom als achtergrondtaak).
+
+| Deel | Gelezen | Instellingen |
+|---|---|---|
+| `belichting` rij 2–84 | weekuren per module (rij 2 = weeknummers, kolom A = module), op celtype naar uren; buiten 0–168 = afgekeurd | *Belichting: rijen weekuren*, *Weekuren min/max* |
+| `belichting` rij 87–127 | kaptabel (ijkpunten), uren-kolommen als duur | *Belichting: rijen kaptabel*, *kolommen kaptabel* (aanname, B8) |
+| `belichting` AK–AM | kostenvergelijking (omschrijving, waarde A, waarde B) | *Belichting: kostenvergelijking* |
+| `teeltschema` | per regel kap, week/dag van planten, licht uit, pluizen, netten, leeg; gewicht, teeltduur, LBE, uitval, reactietijd | *Teeltschema: kolommen* (aanname, B8); ISO-jaar van de eerste regel gevraagd |
+| `data` | streamend (XML): kopregels `Gem. licht%` / `PCU 1:MOD. LICHT 101…` / `%`, daarna tijd + dimstand per module | *Data: interval* (5 min), *Data: tijdstempel* (begin/eind, B21) |
+
+Uitkomst per module per dag: dimgewogen uren (Σ dimstand/100 × interval), branduren (intervallen met dimstand > 0),
+volledig (alle 288 intervallen) en kwaliteit (onvolledig, zomer_wintertijd). Elke tijdstempel telt één keer (een
+tweede regel met dezelfde tijd = dubbel, gemeld).
+
+Synthetisch werkboek: het tabblad `data` heeft vanaf fase 3 ook vier volledige dagen vanaf 1 juli 2024 (onderaan,
+zodat het blad niet op tijdvolgorde staat en er een lange ontbrekende periode juli–oktober is).

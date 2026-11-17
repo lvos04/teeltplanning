@@ -539,6 +539,13 @@ def _schrijf_data(ws, rnd: random.Random) -> None:
         ws.cell(row=i, column=1, value=tijd).number_format = "dd-mm-yyyy hh:mm"
         for j in range(2, 42):
             ws.cell(row=i, column=j, value=rnd.choice([0, 0, 50, 75, 100]))
+    # Fase 3: vier volledige dagen vanaf 1 juli 2024 (begin van de echte reeks), onderaan het blad zodat het blad
+    # niet op tijdvolgorde staat en er tussen juli en oktober een lange ontbrekende periode is.
+    juli = [datetime(2024, 7, 1) + timedelta(minutes=5 * k) for k in range(4 * 288)]
+    for i, tijd in enumerate(juli, start=4 + len(tijden)):
+        ws.cell(row=i, column=1, value=tijd).number_format = "dd-mm-yyyy hh:mm"
+        for j in range(2, 42):
+            ws.cell(row=i, column=j, value=rnd.choice([0, 0, 0, 25, 50, 80, 100]))
 
 
 def maak_alles(map_: Path) -> dict:

@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from tests.synthetisch import PROGRAMMA_NAAM, maak_programma  # noqa: E402
+from tests.synthetisch import BELICHTING_NAAM, PROGRAMMA_NAAM, maak_belichting, maak_programma  # noqa: E402
 
 WACHTWOORD = "rooktest-wachtwoord-123"
 
@@ -91,7 +91,25 @@ def main(basis: str, map_: Path) -> int:
         (map_ / (re.sub(r"\W+", "_", pad) + ".pdf")).write_bytes(inhoud)
     status, _, inhoud = s.verzoek("/afdruk/teeltkaart.xlsx?ronde=3&kap=7")
     assert status == 200 and inhoud[:2] == b"PK"
-    print(json.dumps(uitkomst, indent=1))
+    # Fase 3: belichting importeren (achtergrondtaak in de container), energie- en LBE-schermen
+    maak_belichting(map_ / BELICHTING_NAAM)
+    status, koppen, inhoud = s.bestand(
+        "/import/belichting/upload", BELICHTING_NAAM, (map_ / BELICHTING_NAAM).read_bytes()
+    )
+    assert status == 303, (status, inhoud[:300])
+    pad = urllib.parse.urlparse(koppen["location"]).path
+    s.formulier(pad + "/tijdstempel", {"waarde": "begin"})
+    for _ in range(120):
+        if b"Bezig met lezen" not in s.verzoek(pad)[2]:
+            break
+        time.sleep(1)
+    s.formulier(pad + "/keuzes", {"jaar_weekuren": "2023", "jaar_teeltschema": "2023"})
+    status, koppen, _ = s.formulier(pad + "/bevestig", {})
+    uitkomst["belichting"] = urllib.parse.unquote(koppen.get("location", ""))
+    assert "belichtingsdagen" in uitkomst["belichting"], uitkomst
+    for pad in ("/energie?jaar=2024", "/beheer/lbe", "/beheer/bronnen", "/energie/vergelijking"):
+        assert s.verzoek(pad)[0] == 200, pad
+    print(json.dumps(uitkomst, indent=1, ensure_ascii=False))
     print("rooktest geslaagd")
     return 0
 

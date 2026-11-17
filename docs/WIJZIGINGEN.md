@@ -40,3 +40,35 @@ het register, onbekende waarden zijn `null` met een verwijzing naar OPEN_VRAGEN.
   120 s, metrisch gelijke lettertypen, …). Validatie van celverwijzingen en toegestane velden in toewijzingen.
 * Database: migratie `0002` (tabel `sjabloon`).
 * CI: poppler-utils voor pdf-tekst en overleggen; rooktest met pdf-conversie in de container.
+
+## 0.4.0 — fase 3: licht, energie en dichtheid
+
+* Lampgroepen (§6.4) als beheertabel met de vijf bevestigde groepen; maanden onbekend (vraag 1).
+* Importer *Belichting winterronde* (§7.2) als achtergrondtaak: weekuren, kaptabel (LBE-ijkpunten),
+  kostenvergelijking, teeltschema en het tabblad data streamend → dimgewogen uren per dag, met meldingen over
+  ontbrekende intervallen, dubbele tijdstempels, volgorde en zomer-/wintertijd.
+* Weerbronnen (§10), standaard uit: Open-Meteo (historie, verwachting), weeknormalen P10/P50/P90, KNMI (sleutel
+  versleuteld, verbindingstest; inlezen wacht op B23), EnergyZero (dagprijzen). Scherm Beheer → Bronnen.
+* Rekenkern: lichtsom zon + lampen (§6.3), LBE-keuze met terugval, dichtheidsvoorstel en gewichtsprognose (§6.5),
+  energie en kosten (§6.6), scenariovergelijking; ontbrekend licht = onbekend met reden.
+* Schermen: Energie (per week, per kap per week), Scenariovergelijking, Beheer → LBE en dichtheid (kalibratie,
+  ijkpunten, dichtheidsreeks), teeltpagina met licht/LBE/energie.
+* Nieuwe instellingen in Licht, Gewas, Energie, Import en Bronnen. Database: migratie `0003`.
+* Nieuwe afhankelijkheid: `cryptography` (versleutelde bronsleutels). Image 830 MB.
+
+## 0.5.0 — fase 4: voorstellen met model
+
+* Voorstelladder (§6.7, §8.3) in zuivere Python (`voorstel/model.py`): seizoensbasis (mediaan van hetzelfde ras
+  rond dezelfde plantweek in eerdere jaren) voor LD-dagen, verlenging en reactietijd; temperatuurcorrectie van de
+  reactietijd (standaard uit); voor het gewicht LBE-identiteit, ridge op het residu en bomen met monotone
+  beperkingen. Geen GPU, geen nieuwe afhankelijkheden.
+* Voortschrijdende backtest (trainen t/m jaar N, toetsen op N+1); een trede is alleen *gevalideerd* als hij de
+  seizoensbasis verslaat, anders blijft het voorstel *indicatief*.
+* Trainen als achtergrondtaak in een apart proces; *Beheer → Model* met versies en backtestuitkomsten per doel,
+  trede en toetsjaar. Automatisch hertrainen instelbaar (standaard handmatig).
+* Teeltpagina: bij elk voorstel bron, bandbreedte, modelversie, status en de drie meest vergelijkbare eerdere
+  teelten, in vaste zinnen.
+* Historie uit het plan (alleen handmatige/geïmporteerde waarden) en het teeltschema (`voorstel/historie.py`).
+* Nieuwe instellingen in *Voorstellen* (per veld aan/uit, minimum, bandbreedte, aantal vergelijkbare teelten) en
+  *Model* (treden, kenmerken, monotone beperkingen, drempel, backtestperiode, minimum toetsteelten,
+  hyperparameters, automatisch hertrainen, rekentijd). Database: migratie `0004` (tabel `modelversie`).

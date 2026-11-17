@@ -10,3 +10,5 @@ openpyxl==3.1.5
 defusedxml==0.7.1
 # QR-code voor het koppelen van een authenticator-app (MFA)
 qrcode==8.2
+# Versleutelde opslag van bronsleutels (zoals het Bedrijfsdashboard)
+cryptography==50.0.2

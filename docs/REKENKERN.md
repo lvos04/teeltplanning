@@ -101,3 +101,119 @@ Dit is precies de werkboekregel "weekdag licht uit 1…7 → moment op weekdag 1
 1, 0, 2, 1" (test `test_eerste_moment_zoals_werkboek`). Voorbeeld: plant 2 maart 2026 (10-1), LD 9 → licht uit
 woensdag 11 maart (11-3); momenten 11-3 (LD 0), 11-5 (2), 12-1 (5), 12-3 (7) … tot LD 35; plantweek 10 = zomer,
 dus LD 7 → 35 cm. Een plantweek 53 valt in geen seizoen: streeflengte leeg met melding (open vraag B16).
+
+## Lichtsom (`kern/licht.py`, §6.3)
+
+```
+par_zon_binnen [mol/m²/dag] = straling [J/cm²/dag] × [Licht → Omrekenfactor, start 0,023] × [Kastransmissie, start onbekend]
+par_lamp       [mol/m²/dag] = Σ lampgroepen die op die dag gelden: intensiteit [µmol/m²/s] × dimgewogen uren × 0,0036
+lichtsom       [mol/m²]     = Σ (par_zon_binnen + par_lamp) over de dagen plantdatum … oogst (oogstdag niet meegeteld)
+```
+
+0,0036 = 3600 s/uur ÷ 10⁶ µmol/mol. Voorbeeld: straling 1.000 J/cm², transmissie 0,7 → 16,1 mol/m²/dag zon;
+LED fase 2 (120 µmol) 10 dimgewogen uren → 4,32 mol/m²/dag; tien dagen → 204,2 mol/m².
+
+* **Straling**: verleden = meting (KNMI) of anders historie (Open-Meteo ERA5); toekomst = verwachting (de eerste
+  *Dagen weersverwachting*, start 14) en daarna de **weeknormaal**: P50 van de weeksom ÷ 7 per dag, P10/P90 als band.
+* **Branduren**: verleden = dimgewogen uren per dag uit het tabblad data; anders de weekuren uit het tabblad
+  belichting ÷ 7 (instelling, met melding); toekomst = het eigen historische gemiddelde per module en kalenderweek.
+  Module voor kap k = eerste module van de groep + k − 1 (LED fase 1: 1–40, SON-T rest / LED fase 2: 101–140).
+* **Lampgroep**: geldt op dag d als `geldig_vanaf ≤ d ≤ geldig_tot`; een lege `geldig_vanaf` = "onbekend".
+* **Onbekend**: ontbreekt voor één dag van de teelt straling, transmissie, branduren (of is de dag onvolledig), of is
+  de periode of intensiteit van een geldende lampgroep onbekend, dan is de lichtsom `None` met de ontbrekende
+  perioden en de reden. Er wordt niets aangevuld.
+* Snelheid: per kap worden prefixsommen over het hele plan gemaakt; de lichtsom van een teelt is dan één verschil.
+
+Weeknormalen (`weeknormalen`): weeksom per ISO-jaar en -week (alleen weken met zeven dagen), van de laatste
+*Jaren historie* (start 30) jaren; percentiel met lineaire interpolatie (zoals Excel PERCENTIEL.INC); minder dan
+*Minimum jaren* (start 20) → geen normaal.
+
+## LBE, dichtheid en gewicht (`kern/gewas.py`, §6.5)
+
+```
+productie [g/m²]   = lbe × lichtsom
+takgewicht [g]     = productie / dichtheid
+dichtheid_voorstel = lbe × lichtsom / doelgewicht          → afgerond op [Gewas → Toegestane dichtheden]
+lbe_gerealiseerd   = gemiddeld_takgewicht × dichtheid / lichtsom
+```
+
+Proefcijfers (tests): 7,3 × 938 / 63,8 = **107,3 g**; 7,5 × 640 / 48,8 = **98,4 g**; 6,8 × 834 / 98 = **57,9
+planten/m²**.
+
+* LBE uit de tabel `parameter_lbe` (ras, plantweek, lichtregime). Genoeg waarnemingen (≥ *Minimum waarnemingen per
+  LBE-cel*) → "gevalideerd"; anders het gewogen gemiddelde van het ras binnen ± *Venster seizoensbasis* weken
+  (start 2) → "indicatief"; niets → onbekend. Gemengde kap (bijv. 3a3p): LBE en doelgewicht gewogen naar bedden.
+* Dichtheid: het voorstel is de beslissing die het doelgewicht raakt; handmatig wint altijd. Het gewichtsvoorstel
+  rekent met de **effectieve** dichtheid, met een band uit de lichtsom P10/P90.
+* Kalibratie (*Beheer → LBE en dichtheid*): per afgesloten teelt met één ras de gerealiseerde LBE, gemiddeld per cel.
+
+## Energie (`kern/energie.py`, §6.6)
+
+```
+vermogen [W/m²] = intensiteit / rendement          (of rechtstreeks kW per kap uit de lampgroep)
+verbruik [kWh]  = kW per kap × dimgewogen uren
+kosten [€]      = verbruik × (stroomprijs + opslagen) [€/MWh] / 1000
+kosten per tak  = kosten / oogstaantal
+```
+
+Voorbeeld: LED fase 2 27,5 kW × 10 uur = 275 kWh; bij 100 + 20 €/MWh = € 33,00.
+
+Scenariovergelijking: per scenario lichtsom lampen = µmol × uren × 0,0036, MWh per kap = kW × uren / 1000,
+takken/m² = LBE × (zon + lampen) / doelgewicht, takken per kap = × oppervlak, kosten = stroom + overige kosten per
+tak, opbrengst = takken × prijs per tak; meeropbrengst = Δopbrengst − Δkosten.
+
+## Voorstellen met model (`voorstel/model.py`, §6.7 en §8.3)
+
+De voorstelladder levert de **voorstellaag** voor LD-dagen, verlenging, reactietijd en gewicht. Handmatig wint
+altijd; een opgeslagen voorstel (bijvoorbeeld uit een import) gaat voor een modelvoorstel. De kern kent alleen het
+protocol `kern.typen.Voorspeller`; de uitvoering staat in `voorstel/`.
+
+| doel | trede 1 | hogere treden |
+|---|---|---|
+| LD-dagen, verlenging | seizoensbasis | – |
+| reactietijd | seizoensbasis | temperatuurcorrectie |
+| gewicht | seizoensbasis | LBE-identiteit → ridge op het residu → bomen met monotone beperkingen |
+
+```
+seizoensbasis(ras, plantweek, jaar) = mediaan van hetzelfde ras, plantweek ± venster (start 2), ISO-jaren < jaar
+                                      (en ≥ jaar − terugkijkperiode als die is ingesteld)
+band                                = percentielen (start 10 en 90) van diezelfde waarden
+reactietijd_temperatuur             = seizoensbasis + gevoeligheid(ras) × (referentietemperatuur − verwachte temperatuur)
+gewicht_lbe                         = LBE(ras, plantweek) × lichtsom / dichtheid
+gewicht_ridge / gewicht_bomen       = gewicht_lbe + model(kenmerken)            (het model voorspelt het residu)
+```
+
+* **Gerealiseerde reactietijd** in het teeltschema = teeltduur korte dag − 2 − 3 (instellingen *Reactietijd: eerste
+  en tweede aftrek*). Voorbeeld: korte dag 57 dagen → reactietijd 52.
+* **Historie** (`voorstel/historie.py`): afgesloten teelten (oogst vóór vandaag) uit het vastgestelde plan (alleen
+  handmatige/geïmporteerde waarden, nooit eigen voorstellen; gewicht = werkboekkolom X), het teeltschema (ras via de
+  teelt op dezelfde kap en plantdatum ± tolerantie) en, vanaf fase 6, gekoppelde teelten uit Gewichtsverwachting.
+  Gemengde kappen tellen niet mee voor een ras.
+* **LBE-trede**: LBE per (ras, plantweek) = gemiddelde `gewicht × dichtheid / lichtsom` van de trainingsteelten, met
+  dezelfde keuze en terugval als de kern (`kern.gewas.kies_lbe`). Zonder lichtsom (bijv. transmissie onbekend) kan
+  deze trede niet rekenen en valt het voorstel terug op de seizoensbasis.
+* **Ridge**: gestandaardiseerde kenmerken (plantweek als sin/cos, lichtsom, dichtheid, LD-dagen, ras als aandeel),
+  gesloten vorm `(XᵀX + αI)⁻¹Xᵀy`, α = *Ridge: regularisatie* (start 1).
+* **Bomen**: gradient boosting met stompjes (start 100 stappen, leersnelheid 0,1, minimum 5 per blad). Bij een
+  kenmerk met een monotone beperking wordt alleen een splitsing gekozen waarvan de bladen in de goede richting
+  lopen; de som van zulke stompjes is dan ook monotoon (test `test_bomen_zijn_monotoon`). Omdat de LBE-identiteit
+  zelf stijgt met de lichtsom en daalt met de dichtheid, geldt dat ook voor het totaal.
+* **Gemengde kap** (3a3p): per ras een voorstel, gewogen naar bedden.
+* **Afronden**: LD-dagen, verlenging en reactietijd half naar boven op hele dagen.
+
+### Voortschrijdende backtest
+
+Per toetsjaar N+1: trainen op alle teelten t/m jaar N, toetsen op de teelten van jaar N+1 (geen willekeurige
+kruisvalidatie). Per trede de gemiddelde absolute fout (MAE) op **dezelfde** toetsteelten als de seizoensbasis.
+
+* **gevalideerd**: MAE < MAE seizoensbasis × (1 − drempel/100) én minstens *Minimum toetsteelten* (start 20);
+  drempel leeg = elke verbetering telt.
+* **gekozen trede**: van laag naar hoog; een hogere trede vervangt de gekozen trede alleen als hij gevalideerd is
+  én de gekozen trede op de gedeelde toetsteelten verslaat.
+* Een voorstel uit een gevalideerde hogere trede heeft status **gevalideerd**; een voorstel uit de seizoensbasis
+  is **indicatief**. Ontbreekt de invoer voor de gekozen trede (bijv. geen lichtsom), dan de eerstvolgende lagere.
+* Band bij een hogere trede: percentielen van de backtestfouten van die trede rond de puntschatting.
+
+Voorbeeld (synthetisch, `tests/test_model.py`): gewicht = LBE × lichtsom / dichtheid × ruis ±3 %. Seizoensbasis
+MAE 21,1 g, LBE-identiteit 1,6 g over 225 toetsteelten → LBE gevalideerd en gekozen. Met puur ruis als gewicht:
+seizoensbasis 14,7 g, LBE 27,2 g, ridge 20,6 g, bomen 27,1 g → niets gevalideerd, gekozen = seizoensbasis.

@@ -49,6 +49,8 @@ def batch_pagina(
     request: Request, batch_id: int, gebruiker: Gebruiker = Depends(auth.vereis_lezen), db: Session = Depends(get_db)
 ):
     batch = _batch(db, batch_id)
+    if batch.soort == "belichting":
+        return RedirectResponse(f"/import/belichting/{batch.id}", status_code=303)
     return templates.TemplateResponse(request, "import_batch.html", {
         "gebruiker": gebruiker, "batch": batch, "voorbeeld": batch.voorbeeld or {},
         "kan_schrijven": gebruiker.rol in ("beheerder", "medewerker"),

@@ -157,3 +157,79 @@ Verder in fase 1:
 * Netwerk tijdens de conversie: in de container is `unshare -rn` niet toegestaan (Docker-standaardprofiel), dus
   de conversie draait zonder eigen netwerknaamruimte; externe koppelingen zitten niet in de afdrukkopie en het
   proces krijgt een proxy die nergens heen gaat (`127.0.0.1:9`). Waar `unshare -rn` wel kan, gebruikt de app het.
+
+## Fase 3 — Licht, energie en dichtheid (versie 0.4.0)
+
+| Klaar als | Uitkomst |
+|---|---|
+| De eenheidstests met proefcijfers uit §6.5 slagen | **Gedaan.** `tests/test_kern_licht.py`: `7,3 × 938 / 63,8 = 107,3 g`, `7,5 × 640 / 48,8 = 98,4 g` en `6,8 × 834 / 98 = 57,9 planten/m²` (binnen 0,2), plus de omkering `lbe_gerealiseerd`, afronden op de dichtheidsreeks, terugval op het seizoensgemiddelde (indicatief) en gemengde kappen (gewogen naar bedden). |
+| De berekende LBE van de 22 kappen uit het belichtingsblad ligt binnen een met Leon afgesproken marge van de LBE-realisatie, of het verschil is verklaard | **Gebouwd; wacht op het echte bestand en op antwoorden.** De kaptabel (rij 87–127) wordt geïmporteerd als ijkpunten; *Beheer → LBE en dichtheid* zet per kap de LBE-prognose en -realisatie uit het blad naast de eigen LBE (gewicht realisatie × dichtheid uit het plan / lichtsom van de app), met verschil en oordeel. Synthetisch: 22 ijkpunten ingelezen en getoond (`test_ijkpunten_…`); de getallen zijn verzonnen, dus een vergelijking zegt niets. Nodig: het echte werkboek, de **marge** (B24), de **kastransmissie** (vraag 6), de **maanden van de lampgroepen** (vraag 1), het jaar van het blad (vraag 2), en de bijbehorende teelten in het geïmporteerde programma (kap + plantdatum). Tot dan staat bij elke regel waarom de LBE onbekend is. |
+| Dimgewogen uren per dag uit `data` kloppen met een handmatig nagerekende steekproef van vijf dagen | **Synthetisch: gedaan. Echt: wacht op het bestand (test klaar).** `test_dimgewogen_uren_steekproef_vijf_dagen` rekent onafhankelijk na (het hele blad met openpyxl, Σ dimstand/100 × 5/60, elke tijdstempel één keer) voor vijf volledige dagen en drie modules; alle 15 waarden gelijk (zie hieronder). Met het echte bestand: `TEELT_ECHT_BELICHTING=<pad> TEELT_ECHT_BELICHTING_JAAR=2023 pytest -s tests/test_belichting.py -k echt` kiest vijf willekeurige volledige dagen en rekent ze op dezelfde manier na. |
+| Ontbrekende perioden in de belichtingsdata worden gemeld en leveren geen stilzwijgend ingevulde lichtsom | **Gedaan.** Het importvoorbeeld meldt ontbrekende intervallen als perioden (synthetisch: 5 juli – 26 oktober 2024 en 28 oktober 03:00–04:00), onvolledige dagen, dubbele tijdstempels, regels buiten tijdvolgorde en dagen met zomer-/wintertijdovergang (27 oktober 2024). Een teelt waarvoor één dag licht ontbreekt, krijgt lichtsom **onbekend** met de ontbrekende dagen en de reden (`test_lichtsom_in_het_plan_en_ontbrekende_perioden`, `test_ontbrekende_dag_geeft_geen_stilzwijgende_lichtsom`); een onvolledige dag telt standaard als ontbrekend (instelling). Ook onbekende transmissie, lampgroepperiode, intensiteit of straling geven een reden in plaats van een getal. |
+| kWh per week sluit aan op een door Leon aangeleverde meterstand of factuur, of het verschil staat in `OPEN_VRAGEN.md` | **Niet gedaan: wacht op een meterstand of factuur (B25)** en op de maanden van de lampgroepen (vraag 1) en de bron van de branduren van LED fase 1 sinds juli 2024 (vraag 3). Het scherm *Energie* toont kWh en kosten per week voor het bedrijf en per kap per week; zolang de lampgroepperiodes onbekend zijn staat daar "onbekend" met de reden. |
+
+Steekproef dimgewogen uren (synthetisch werkboek, uren per dag):
+
+| dag | module 101 | module 120 | module 140 |
+|---|---|---|---|
+| 1-7-2024 | 8,9250 | 8,6167 | 8,7792 |
+| 2-7-2024 | 9,3500 | 8,1792 | 8,7750 |
+| 3-7-2024 | 8,7667 | 9,0917 | 8,5708 |
+| 4-7-2024 | 9,1083 | 8,0292 | 9,2083 |
+| 26-10-2024 | 10,7917 | 10,9792 | 10,1042 |
+
+App en handmatige berekening zijn gelijk (verschil < 10⁻⁹).
+
+Verder in fase 3:
+
+* **Lampgroepen** (§6.4) als beheertabel met de vijf bevestigde groepen als startgegevens; `geldig_vanaf`/`geldig_tot`
+  leeg (vraag 1). SON-T volledig (120 µmol, 50 kW) staat op "indicatief" (afgeleid); LED fase 2 heeft 27,5 kW per kap,
+  afgeleid uit "samen 47,5 kW" − 20 kW (status indicatief, in de opmerking uitgelegd).
+* **Importer §7.2** als achtergrondtaak met voortgang: weekuren (op celtype, 0–168 gecontroleerd, jaar gevraagd),
+  kaptabel, kostenvergelijking AK–AM, teeltschema (860 regels, jaar gevraagd) en het tabblad data streamend
+  (XML-regel voor regel). Idempotent (tweede bevestiging en herimport maken niets dubbel).
+* **Weerbronnen** (§10), alle standaard uit, alleen met nep-HTTP getest (een fixture laat elk echt verzoek falen):
+  Open-Meteo historie + verwachting (MJ/m² × 100 = J/cm², incrementeel bijwerken, adres instelbaar, melding over
+  niet-commercieel gebruik); weeknormalen P10/P50/P90 per ISO-week (alleen volledige weken, laatste 30 jaar,
+  minimaal 20); KNMI: sleutel versleuteld (Fernet, `/data/geheim.key`), verbinding testbaar, **waarden inlezen staat
+  uit** tot variabele, eenheid en bestandsformaat zijn geverifieerd (B23); EnergyZero: dagprijzen (€/kWh → €/MWh).
+* **Lichtsom** in de rekenkern, met prefixsommen per kap: het hele plan (34 × 40) met acht jaar dagdata in
+  ±140–165 ms (test, grens 200 ms; zonder lichtdata ±30 ms).
+* **Dichtheidsvoorstel** (LBE × lichtsom / doelgewicht, afgerond op de reeks, niet-afgeronde waarde zichtbaar) en
+  **gewichtsprognose** (LBE × lichtsom / dichtheid, met band uit P10/P90) als voorstel; handmatig wint altijd.
+  Doelgewicht per ras is onbekend (vraag 7), dus er is nog geen dichtheidsvoorstel.
+* **Energie en kosten** per teelt (teeltpagina), per kap per week en per week voor het bedrijf (scherm *Energie*);
+  **scenariovergelijking** (§6.6) op *Energie → Scenariovergelijking* met de startwaarden uit AK–AM zichtbaar.
+
+### Tests en container fase 3
+
+* `pytest`: 131 geslaagd, 5 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon;
+  browser-rooktest geslaagd. Geen echte netwerkverbindingen in tests (fixture `geen_netwerk`).
+* Docker (lokaal): image **830 MB** (+24 MB door `cryptography`). Start als 568, `/health` =
+  `{"status":"ok","versie":"0.4.0"}`, healthcheck `healthy`. `tests/container_rooktest.py`: naast de pdf's van fase 2
+  (rondeblad 1 pagina, kaart 1 pagina, alle kaarten 20 pagina's) nu ook het synthetische belichtingswerkboek
+  importeren in de container (achtergrondtaak): 2.158 weekuren, 22 ijkpunten, 860 teeltschemaregels, 280
+  belichtingsdagen; schermen Energie, LBE, Bronnen en Scenariovergelijking geven 200; `/data/tmp` leeg.
+
+## Fase 4 — Voorstellen met model (versie 0.5.0)
+
+| Klaar als | Uitkomst |
+|---|---|
+| Een model wordt alleen "gevalideerd" als het de seizoensbasis verslaat in de voortschrijdende backtest, en de backtestuitkomsten zijn in de app te zien | **Synthetisch: gedaan. Echt: wacht op historie met lichtsom.** `voorstel/model.py`: per toetsjaar N+1 trainen t/m N (`test_backtest_voortschrijdend_trainen_tm_jaar_n_toetsen_op_n_plus_1`). Synthetische historie met een echt lichtsignaal: LBE-identiteit MAE 1,6 g tegenover seizoensbasis 21,1 g → *gevalideerd* en gekozen; dezelfde historie met ruis als gewicht: geen enkele trede gevalideerd, gekozen = seizoensbasis (`test_model_alleen_gevalideerd_als_het_de_seizoensbasis_verslaat`); ook drempel en minimum toetsteelten (`test_drempel_en_minimum_toetsteelten`) en de temperatuurtrede (`test_temperatuurcorrectie_alleen_als_ze_wint`). *Beheer → Model* toont per doel en trede status, toetsteelten, fout tegenover de seizoensbasis en de fout per toetsjaar (`test_trainen_backtest_en_uitleg_bij_voorstel`). Met het echte werkboek: zolang transmissie (vraag 6) en lampgroepmaanden (vraag 1) onbekend zijn, is de lichtsom onbekend, kunnen LBE, ridge en bomen niet rekenen ("onvoldoende gegevens") en blijven alle voorstellen **indicatief** op de seizoensbasis. |
+| Elk voorstel toont bron, bandbreedte, modelversie en drie vergelijkbare teelten | **Gedaan (synthetisch).** Teeltpagina: per veld met een voorstel vaste zinnen voor bron, bandbreedte, modelversie en status, en de drie meest vergelijkbare eerdere teelten (kap, plantdatum, waarde, bron). Voor rekenregels (keten, uitvaltabel) staat er dat het een rekenregel is; voor dichtheid en uitval komen de vergelijkbare teelten uit dezelfde modelversie. Getest in `test_trainen_backtest_en_uitleg_bij_voorstel` en `test_train_en_voorspeller_leveren_bron_band_modelversie_en_drie_vergelijkbare`. |
+| Alles draait zonder GPU en training blokkeert de webapp niet | **Gedaan.** Zuivere Python, geen nieuwe pakketten (ARCHITECTUUR.md). *Nu trainen* komt binnen 5 s terug (in de test < 0,1 s), `/health` antwoordt tijdens de training en de backtest draait in een **ander proces** (pid in het artefact ≠ pid van de webapp, getest). Het hele plan met modelvoorstellen: ±45 ms (`test_hele_plan_met_modelvoorstellen_onder_200_ms`). |
+
+Verder in fase 4:
+
+* **Historie** (`voorstel/historie.py`): afgesloten teelten uit het vastgestelde plan (alleen handmatige of
+  geïmporteerde waarden; gewicht = kolom X), aangevuld met het teeltschema via kap + plantdatum. Op het synthetische
+  werkboek: ruim 500 teelten uit het plan (test). Hertrainen verandert geen enkele handmatige waarde (test).
+* **Ladder**: LD-dagen en verlenging alleen seizoensbasis; reactietijd + temperatuurcorrectie (uit, B34); gewicht
+  seizoensbasis → LBE → ridge → bomen met monotone beperkingen (lichtsom stijgend, dichtheid dalend).
+* Zonder getraind model verandert er niets ten opzichte van fase 3 (geen voorstellen voor LD/reactietijd; gewicht
+  uit de LBE-berekening).
+
+### Tests fase 4
+
+* `pytest`: 145 geslaagd, 5 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon.
+* Image: geen nieuwe pakketten (zie fase 6 voor de containerbuild).

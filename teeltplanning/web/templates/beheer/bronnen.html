@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block titel %}Bronnen{% endblock %}
+{% block inhoud %}
+<h1>Externe bronnen</h1>
+<p>Elke bron staat na een schone installatie <strong>uit</strong> en wordt aangezet bij <a href="/beheer/instellingen?groep=Bronnen">Instellingen → Bronnen</a>. De app werkt ook zonder: waar straling ontbreekt, is de lichtsom onbekend.
+Open-Meteo: de gratis API is voor <strong>niet-commercieel</strong> gebruik; het adres is instelbaar (eigen server of betaald abonnement).</p>
+<table class="lijst"><thead><tr><th>bron</th><th>aan</th><th>laatst gelukt</th><th>laatste poging</th><th>melding</th><th></th></tr></thead><tbody>
+{% for b in bronnen %}<tr><td>{{ b.label }}</td><td>{{ 'aan' if b.aan else 'uit' }}</td><td>{{ b.laatst_gelukt|tijd or 'nooit' }}</td><td>{{ b.laatst_geprobeerd|tijd }}</td><td>{{ b.melding or '' }}</td>
+<td><form method="post" action="/beheer/bronnen/{{ b.bron }}/ophalen"><button {% if not b.aan %}disabled title="staat uit"{% endif %}>Nu ophalen</button></form></td></tr>{% endfor %}
+</tbody></table>
+<h2>KNMI-API-sleutel</h2>
+<p class="hulp">Wordt versleuteld opgeslagen (<code>/data/geheim.key</code>) en nooit getoond. Leeg opslaan = verwijderen. Het inlezen van KNMI-waarden wacht op de verificatie van variabele en bestandsformaat (vraag B23); met de sleutel kan de verbinding wel worden getest.</p>
+<form method="post" action="/beheer/bronnen/knmi/sleutel" class="formulier"><input type="password" name="sleutel" autocomplete="off" placeholder="{{ 'ingevuld' if bronnen[1].geheim else 'niet ingevuld' }}"><button>Opslaan</button></form>
+<h2>Weergegevens</h2>
+<table class="lijst"><thead><tr><th>soort</th><th>bron</th><th>dagen</th><th>van</th><th>tot</th></tr></thead><tbody>
+{% for soort, bron, n, van, tot in weer %}<tr><td>{{ soort }}</td><td>{{ bron }}</td><td>{{ n }}</td><td>{{ van }}</td><td>{{ tot }}</td></tr>{% else %}<tr><td colspan="5">nog geen</td></tr>{% endfor %}
+</tbody></table>
+<h2>Weeknormalen straling (J/cm² per week)</h2>
+{% if normalen %}<table class="lijst"><thead><tr><th>week</th><th>P-laag</th><th>P50</th><th>P-hoog</th><th>jaren</th></tr></thead><tbody>
+{% for n in normalen %}<tr><td>{{ n.week }}</td><td>{{ n.p10|getal(0, 'onbekend') }}</td><td>{{ n.p50|getal(0, 'onbekend') }}</td><td>{{ n.p90|getal(0, 'onbekend') }}</td><td>{{ n.jaren }}</td></tr>{% endfor %}
+</tbody></table>{% else %}<p>Nog geen (er is nog geen daghistorie).</p>{% endif %}
+{% endblock %}
