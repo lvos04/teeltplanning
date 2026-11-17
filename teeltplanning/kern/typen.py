@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
+from typing import Any, Protocol
 
 # Velden met drie lagen (voorstel / handmatig / effectief). `tussenlicht` is de datum uit kolom K van het
 # rondeblad; `tussenlicht_dagen` is het aantal dagen tussenlicht voor "tweede licht uit" (teeltkaart rij 7).
@@ -95,11 +95,49 @@ class KernInstellingen:
 
 
 @dataclass(frozen=True)
+class Vergelijkbaar:
+    """Eén eerdere teelt die op een voorstel lijkt (uitleg bij het voorstel, §8.3)."""
+
+    kap: int | None
+    plantdatum: date | None
+    waarde: Any
+    bron: str
+    ras: str | None = None
+
+
+@dataclass(frozen=True)
+class Voorspelling:
+    """Een voorstel uit de voorstelladder (§6.7, §8.3), met alles wat de uitleg nodig heeft."""
+
+    waarde: Any
+    ondergrens: float | None
+    bovengrens: float | None
+    bron: str  # vaste zin, bijv. "seizoensbasis: mediaan van 7 teelten …"
+    modelversie: str | None
+    status: str  # gevalideerd | indicatief
+    trede: str  # seizoensbasis | lbe | ridge | bomen | temperatuur
+    aantal: int = 0  # waarnemingen waarop het voorstel rust
+    vergelijkbaar: tuple[Vergelijkbaar, ...] = ()
+
+
+class Voorspeller(Protocol):
+    """Levert voorstellen voor de kern. De kern kent alleen dit protocol; de uitvoering staat in `voorstel/`.
+
+    `rassen` is ((code, bedden), …) zoals in `TeeltInvoer`. Geen voorstel = None (dan blijft het veld onbekend of
+    neemt de kern de eigen LBE-berekening voor het gewicht)."""
+
+    def veld(self, naam: str, rassen: tuple, plantdatum: date, licht_uit: date | None) -> Voorspelling | None: ...
+
+    def gewicht(self, rassen: tuple, plantdatum: date, kenmerken: dict[str, Any]) -> Voorspelling | None: ...
+
+
+@dataclass(frozen=True)
 class Parameters:
     kappen: dict[int, KapInvoer]
     instellingen: KernInstellingen
     licht: Any = None  # kern.licht.LichtInvoer; None = geen licht-, energie- en LBE-berekening
     gewas: Any = None  # kern.gewas.GewasInvoer
+    voorspeller: Any = None  # Voorspeller (fase 4); None = geen modelvoorstellen
 
 
 @dataclass(frozen=True)
@@ -136,6 +174,7 @@ class TeeltUitkomst:
     lbe: Any = None  # kern.gewas.LbeKeuze
     dichtheid_onafgerond: float | None = None
     gewicht_band: tuple[float | None, float | None] = (None, None)
+    toelichting: dict[str, Voorspelling] = field(default_factory=dict)  # per veld met een modelvoorstel
 
     @property
     def heeft_fout(self) -> bool:

@@ -210,3 +210,26 @@ Verder in fase 3:
   (rondeblad 1 pagina, kaart 1 pagina, alle kaarten 20 pagina's) nu ook het synthetische belichtingswerkboek
   importeren in de container (achtergrondtaak): 2.158 weekuren, 22 ijkpunten, 860 teeltschemaregels, 280
   belichtingsdagen; schermen Energie, LBE, Bronnen en Scenariovergelijking geven 200; `/data/tmp` leeg.
+
+## Fase 4 — Voorstellen met model (versie 0.5.0)
+
+| Klaar als | Uitkomst |
+|---|---|
+| Een model wordt alleen "gevalideerd" als het de seizoensbasis verslaat in de voortschrijdende backtest, en de backtestuitkomsten zijn in de app te zien | **Synthetisch: gedaan. Echt: wacht op historie met lichtsom.** `voorstel/model.py`: per toetsjaar N+1 trainen t/m N (`test_backtest_voortschrijdend_trainen_tm_jaar_n_toetsen_op_n_plus_1`). Synthetische historie met een echt lichtsignaal: LBE-identiteit MAE 1,6 g tegenover seizoensbasis 21,1 g → *gevalideerd* en gekozen; dezelfde historie met ruis als gewicht: geen enkele trede gevalideerd, gekozen = seizoensbasis (`test_model_alleen_gevalideerd_als_het_de_seizoensbasis_verslaat`); ook drempel en minimum toetsteelten (`test_drempel_en_minimum_toetsteelten`) en de temperatuurtrede (`test_temperatuurcorrectie_alleen_als_ze_wint`). *Beheer → Model* toont per doel en trede status, toetsteelten, fout tegenover de seizoensbasis en de fout per toetsjaar (`test_trainen_backtest_en_uitleg_bij_voorstel`). Met het echte werkboek: zolang transmissie (vraag 6) en lampgroepmaanden (vraag 1) onbekend zijn, is de lichtsom onbekend, kunnen LBE, ridge en bomen niet rekenen ("onvoldoende gegevens") en blijven alle voorstellen **indicatief** op de seizoensbasis. |
+| Elk voorstel toont bron, bandbreedte, modelversie en drie vergelijkbare teelten | **Gedaan (synthetisch).** Teeltpagina: per veld met een voorstel vaste zinnen voor bron, bandbreedte, modelversie en status, en de drie meest vergelijkbare eerdere teelten (kap, plantdatum, waarde, bron). Voor rekenregels (keten, uitvaltabel) staat er dat het een rekenregel is; voor dichtheid en uitval komen de vergelijkbare teelten uit dezelfde modelversie. Getest in `test_trainen_backtest_en_uitleg_bij_voorstel` en `test_train_en_voorspeller_leveren_bron_band_modelversie_en_drie_vergelijkbare`. |
+| Alles draait zonder GPU en training blokkeert de webapp niet | **Gedaan.** Zuivere Python, geen nieuwe pakketten (ARCHITECTUUR.md). *Nu trainen* komt binnen 5 s terug (in de test < 0,1 s), `/health` antwoordt tijdens de training en de backtest draait in een **ander proces** (pid in het artefact ≠ pid van de webapp, getest). Het hele plan met modelvoorstellen: ±45 ms (`test_hele_plan_met_modelvoorstellen_onder_200_ms`). |
+
+Verder in fase 4:
+
+* **Historie** (`voorstel/historie.py`): afgesloten teelten uit het vastgestelde plan (alleen handmatige of
+  geïmporteerde waarden; gewicht = kolom X), aangevuld met het teeltschema via kap + plantdatum. Op het synthetische
+  werkboek: ruim 500 teelten uit het plan (test). Hertrainen verandert geen enkele handmatige waarde (test).
+* **Ladder**: LD-dagen en verlenging alleen seizoensbasis; reactietijd + temperatuurcorrectie (uit, B34); gewicht
+  seizoensbasis → LBE → ridge → bomen met monotone beperkingen (lichtsom stijgend, dichtheid dalend).
+* Zonder getraind model verandert er niets ten opzichte van fase 3 (geen voorstellen voor LD/reactietijd; gewicht
+  uit de LBE-berekening).
+
+### Tests fase 4
+
+* `pytest`: 145 geslaagd, 5 overgeslagen (echte bestanden); `ruff check` en `ruff format --check` schoon.
+* Image: geen nieuwe pakketten (zie fase 6 voor de containerbuild).

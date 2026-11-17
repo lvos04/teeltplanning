@@ -75,8 +75,28 @@ def _grenscontrole(naam: str, waarde, inst: KernInstellingen) -> Melding | None:
     return None
 
 
+# Velden waarvoor de voorstelladder (fase 4) een voorstel kan geven, in de volgorde van de keten: LD-dagen en
+# verlenging hangen af van de plantdatum, de reactietijd ook van licht uit (temperatuur in de korte dag).
+MODELVELDEN = ("ld_dagen", "verlenging", "reactietijd")
+
+
+def _laag(teelt: TeeltInvoer, naam: str, voorstel: dict, effectief: dict, bron: dict) -> None:
+    handmatig = teelt.veld(naam).handmatig
+    if handmatig is not None:
+        effectief[naam], bron[naam] = handmatig, "handmatig"
+    elif voorstel[naam] is not None:
+        effectief[naam], bron[naam] = voorstel[naam], "voorstel"
+    else:
+        effectief[naam], bron[naam] = None, None
+
+
 def bereken_teelt(
-    teelt: TeeltInvoer, kap: KapInvoer, vorige_oogst: date | None, eerste_in_keten: bool, inst: KernInstellingen
+    teelt: TeeltInvoer,
+    kap: KapInvoer,
+    vorige_oogst: date | None,
+    eerste_in_keten: bool,
+    inst: KernInstellingen,
+    voorspeller=None,
 ) -> TeeltUitkomst:
     meldingen: list[Melding] = []
     voorstel = {naam: teelt.veld(naam).voorstel for naam in VELDEN}
@@ -84,16 +104,22 @@ def bereken_teelt(
         voorstel["plantdatum"] = plantdatum_voorstel(vorige_oogst, kap, inst)
     effectief: dict = {}
     bron: dict = {}
+    toelichting: dict = {}
     for naam in VELDEN:
-        handmatig = teelt.veld(naam).handmatig
-        if handmatig is not None:
-            effectief[naam], bron[naam] = handmatig, "handmatig"
-        elif voorstel[naam] is not None:
-            effectief[naam], bron[naam] = voorstel[naam], "voorstel"
-        else:
-            effectief[naam], bron[naam] = None, None
+        _laag(teelt, naam, voorstel, effectief, bron)
 
     plant = effectief["plantdatum"]
+    if voorspeller is not None and plant is not None:
+        # Een opgeslagen voorstel (bijv. uit het werkboek of van genereren) gaat voor; handmatig wint altijd.
+        for naam in MODELVELDEN:
+            if voorstel[naam] is not None:
+                continue
+            lu_nu = licht_uit(plant, effectief["ld_dagen"])
+            v = voorspeller.veld(naam, teelt.rassen, plant, lu_nu)
+            if v is not None:
+                voorstel[naam] = v.waarde
+                toelichting[naam] = v
+                _laag(teelt, naam, voorstel, effectief, bron)
     lu = licht_uit(plant, effectief["ld_dagen"])
     oogstdatum = oogst(lu, effectief["reactietijd"], effectief["verlenging"])
     # Uitvalvoorstel hangt af van de oogstweek; pas na de oogstdatum bekend.
@@ -156,15 +182,18 @@ def bereken_teelt(
         geplant=geplant,
         oogstaantal=gewas.oogstaantal(geplant, effectief["uitval"]),
         meldingen=tuple(meldingen),
+        toelichting=toelichting,
     )
 
 
-def bereken_keten(teelten: list[TeeltInvoer], kap: KapInvoer, inst: KernInstellingen) -> list[TeeltUitkomst]:
+def bereken_keten(
+    teelten: list[TeeltInvoer], kap: KapInvoer, inst: KernInstellingen, voorspeller=None
+) -> list[TeeltUitkomst]:
     """Reken de teelten van één kap door, in volgorde van ronde."""
     uitkomsten = []
     vorige_oogst: date | None = None
     for index, teelt in enumerate(sorted(teelten, key=lambda t: t.ronde)):
-        uitkomst = bereken_teelt(teelt, kap, vorige_oogst, index == 0, inst)
+        uitkomst = bereken_teelt(teelt, kap, vorige_oogst, index == 0, inst, voorspeller)
         uitkomsten.append(uitkomst)
         vorige_oogst = uitkomst.oogst
     return uitkomsten

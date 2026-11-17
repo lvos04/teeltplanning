@@ -108,3 +108,19 @@ historie*, en de ijkpunten uit het belichtingsblad naast de eigen LBE.
 
 **Energie**: kWh en kosten per week voor het bedrijf en per kap per week, per jaar; *Scenariovergelijking* zet
 twee lichtniveaus naast elkaar (takken, MWh, kosten per tak, meeropbrengst).
+
+## Voorstellen met model (fase 4)
+
+**Beheer → Model**: *Nu trainen en toetsen* (beheerder) start een training op de achtergrond; de pagina keert
+meteen terug en de app blijft bruikbaar. Na afloop staan per doel (LD-dagen, verlenging, reactietijd, gewicht) de
+treden met hun status (referentie, gevalideerd, indicatief, onvoldoende gegevens), het aantal toetsteelten, de
+gemiddelde fout tegenover de seizoensbasis en de fout per toetsjaar. De nieuwste geslaagde versie is *actief*.
+Automatisch hertrainen staat uit (Instellingen → Model → *Automatisch hertrainen*).
+
+**Teelt**: bij elk voorstel staan in vaste zinnen de **bron** (bijv. "Seizoensbasis: mediaan van 9 eerdere
+teelten van ras a met plantweek 12 ± 2 in eerdere jaren."), de **bandbreedte**, de **modelversie** met status
+(gevalideerd/indicatief) en de **drie meest vergelijkbare eerdere teelten** (kap, plantdatum, waarde, bron). Bij
+een rekenregel (keten, uitvaltabel) staat dat er; zonder getraind model staat er "nog geen getraind model".
+
+Zolang er met echte gegevens geen trede de seizoensbasis verslaat (of de lichtsom onbekend is), zijn alle
+voorstellen **indicatief**.

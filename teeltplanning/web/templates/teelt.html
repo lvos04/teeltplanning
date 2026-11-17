@@ -10,7 +10,14 @@
 {% for v in velden %}
 <tr>
   <td>{{ v.label }}</td>
-  <td>{{ v.voorstel or 'onbekend' }}{% if v.voorstel_bron %}<br><small>{{ v.voorstel_bron }}</small>{% endif %}</td>
+  <td>{{ v.voorstel or 'onbekend' }}{% if v.uitleg %}{% set x = v.uitleg %}<div class="uitleg">
+    <small><strong>Bron:</strong> {{ x.bron }}</small><br>
+    <small><strong>Bandbreedte:</strong> {{ x.band or 'geen' }}</small><br>
+    <small><strong>Modelversie:</strong> {{ x.modelversie or 'geen (rekenregel)' }} · <strong>status:</strong> {{ x.status }}</small><br>
+    <small><strong>Vergelijkbare teelten:</strong>
+    {% if x.vergelijkbaar %}{% for c in x.vergelijkbaar %}kap {{ c.kap if c.kap is not none else '?' }}, {{ c.plantdatum|wd('week-dag-jaar') }}{% if c.ras %} ({{ c.ras }}){% endif %}: {{ c.waarde|getal(1) if c.waarde is number else c.waarde }} [{{ c.bron }}]{% if not loop.last %}; {% endif %}{% endfor %}
+    {% elif x.geen_vergelijkbaar %}{{ x.geen_vergelijkbaar }}{% else %}geen eerdere teelten van dit ras rond deze plantweek{% endif %}</small>
+  </div>{% endif %}</td>
   <td class="{% if v.handmatig %}handmatig{% endif %}">{{ v.handmatig }}</td>
   <td>{{ v.effectief or 'onbekend' }}</td>
   <td>{% if v.wijziging and v.wijziging.gewijzigd_op %}{{ v.wijziging.gewijzigd_op|tijd }} {{ v.door or '' }} {% if v.wijziging.handmatig_bron %}({{ v.wijziging.handmatig_bron }}){% endif %}{% if v.wijziging.reden %}<br><small>{{ v.wijziging.reden }}</small>{% endif %}{% endif %}</td>

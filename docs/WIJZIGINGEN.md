@@ -55,3 +55,20 @@ het register, onbekende waarden zijn `null` met een verwijzing naar OPEN_VRAGEN.
   ijkpunten, dichtheidsreeks), teeltpagina met licht/LBE/energie.
 * Nieuwe instellingen in Licht, Gewas, Energie, Import en Bronnen. Database: migratie `0003`.
 * Nieuwe afhankelijkheid: `cryptography` (versleutelde bronsleutels). Image 830 MB.
+
+## 0.5.0 — fase 4: voorstellen met model
+
+* Voorstelladder (§6.7, §8.3) in zuivere Python (`voorstel/model.py`): seizoensbasis (mediaan van hetzelfde ras
+  rond dezelfde plantweek in eerdere jaren) voor LD-dagen, verlenging en reactietijd; temperatuurcorrectie van de
+  reactietijd (standaard uit); voor het gewicht LBE-identiteit, ridge op het residu en bomen met monotone
+  beperkingen. Geen GPU, geen nieuwe afhankelijkheden.
+* Voortschrijdende backtest (trainen t/m jaar N, toetsen op N+1); een trede is alleen *gevalideerd* als hij de
+  seizoensbasis verslaat, anders blijft het voorstel *indicatief*.
+* Trainen als achtergrondtaak in een apart proces; *Beheer → Model* met versies en backtestuitkomsten per doel,
+  trede en toetsjaar. Automatisch hertrainen instelbaar (standaard handmatig).
+* Teeltpagina: bij elk voorstel bron, bandbreedte, modelversie, status en de drie meest vergelijkbare eerdere
+  teelten, in vaste zinnen.
+* Historie uit het plan (alleen handmatige/geïmporteerde waarden) en het teeltschema (`voorstel/historie.py`).
+* Nieuwe instellingen in *Voorstellen* (per veld aan/uit, minimum, bandbreedte, aantal vergelijkbare teelten) en
+  *Model* (treden, kenmerken, monotone beperkingen, drempel, backtestperiode, minimum toetsteelten,
+  hyperparameters, automatisch hertrainen, rekentijd). Database: migratie `0004` (tabel `modelversie`).

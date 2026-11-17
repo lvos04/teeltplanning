@@ -179,10 +179,43 @@ REGISTER_LIJST: list[Instelling] = [
       "getal", None, "g/mol", min=0, max=100, null=True, vraag="B24", fase=3),
     # --- Voorstellen / Model -----------------------------------------------------------------------------
     I("voorstel.seizoensvenster_weken", "Voorstellen", "Venster seizoensbasis", "Plantweken rond de eigen plantweek voor de seizoensbasis (±).", "geheel", 2, "weken", min=0, max=26, fase=4),
-    I("voorstel.terugkijk_jaren", "Voorstellen", "Terugkijkperiode", "Aantal jaren historie voor voorstellen.", "geheel", None, "jaar", min=1, max=50, null=True, fase=4),
+    I("voorstel.terugkijk_jaren", "Voorstellen", "Terugkijkperiode", "Aantal jaren historie voor voorstellen. Leeg = alle eerdere jaren.", "geheel", None, "jaar", min=1, max=50, null=True, fase=4),
     I("voorstel.temperatuurcorrectie", "Voorstellen", "Temperatuurcorrectie reactietijd", "Standaard uit tot er temperatuurdata en een gekalibreerde gevoeligheid zijn.", "bool", False, fase=4),
     I("voorstel.referentietemperatuur", "Voorstellen", "Referentietemperatuur", "Voor de temperatuurcorrectie.", "getal", None, "°C", min=-10, max=40, null=True, fase=4),
-    I("model.drempel_gevalideerd", "Model", "Drempel voor 'gevalideerd'", "Hoeveel beter dan de seizoensbasis een model in de backtest moet zijn.", "getal", None, min=0, max=1000, null=True, fase=4),
+    I("voorstel.ld_dagen_aan", "Voorstellen", "Voorstel LD-dagen", "Mediaan van hetzelfde ras rond dezelfde plantweek in eerdere jaren (§6.7). Handmatig wint altijd.", "bool", True, fase=4),
+    I("voorstel.reactietijd_aan", "Voorstellen", "Voorstel reactietijd", "Seizoensbasis, eventueel met temperatuurcorrectie (§6.7). Handmatig wint altijd.", "bool", True, fase=4),
+    I("voorstel.verlenging_aan", "Voorstellen", "Voorstel verlenging", "Seizoensbasis van de dagen verlenging. Handmatig wint altijd.", "bool", True, fase=4),
+    I("voorstel.gewicht_aan", "Voorstellen", "Voorstel gewicht uit het model",
+      "Gewichtsprognose uit de voorstelladder (§8.3). Uit: de LBE-berekening van fase 3 (LBE × lichtsom / dichtheid).", "bool", True, fase=4),
+    I("voorstel.min_waarnemingen", "Voorstellen", "Minimum teelten voor een seizoensbasis",
+      "Minder eerdere teelten binnen het venster = geen voorstel (onbekend).", "geheel", 1, min=1, max=1000, fase=4),
+    I("voorstel.band_percentielen", "Voorstellen", "Breedte van de bandbreedte",
+      "Onder- en bovenpercentiel (in procenten) van de seizoensbasis en van de backtestfouten.", "lijst", ["10", "90"], fase=4),
+    I("voorstel.aantal_vergelijkbaar", "Voorstellen", "Vergelijkbare teelten in de uitleg", "§8.3: de drie meest vergelijkbare eerdere teelten.", "geheel", 3, min=1, max=20, fase=4),
+    I("model.treden", "Model", "Actieve treden",
+      "Treden van de voorstelladder die worden getraind en getoetst. De seizoensbasis doet altijd mee.", "lijst",
+      ["lbe", "ridge", "bomen", "temperatuur"], keuzes=("lbe", "ridge", "bomen", "temperatuur"), fase=4),
+    I("model.kenmerken_ridge", "Model", "Kenmerken ridge", "Kenmerken voor de ridge-regressie op het residu van de LBE-identiteit (§8.3).",
+      "lijst", ["plantweek", "lichtsom", "dichtheid", "ld_dagen", "ras"], keuzes=("plantweek", "lichtsom", "dichtheid", "ld_dagen", "ras"), fase=4),
+    I("model.kenmerken_bomen", "Model", "Kenmerken bomen", "Kenmerken voor de bomen met monotone beperkingen (§8.3).",
+      "lijst", ["plantweek", "lichtsom", "dichtheid", "ld_dagen", "ras"], keuzes=("plantweek", "lichtsom", "dichtheid", "ld_dagen", "ras"), fase=4),
+    I("model.monotoon", "Model", "Monotone beperkingen",
+      "Per kenmerk: stijgend (meer licht nooit lichter) of dalend (hogere dichtheid nooit zwaarder).", "toewijzing",
+      {"lichtsom": "stijgend", "dichtheid": "dalend"}, patroon=r"stijgend|dalend", sleutels=("lichtsom", "dichtheid", "ld_dagen"), fase=4),
+    I("model.drempel_gevalideerd", "Model", "Drempel voor 'gevalideerd'",
+      "Hoeveel procent lager de gemiddelde absolute fout dan die van de seizoensbasis moet zijn in de backtest. Leeg = elke "
+      "verbetering telt (strikt kleiner).", "getal", None, "%", min=0, max=100, null=True, fase=4),
+    I("model.backtest_jaren", "Model", "Backtestperiode", "Aantal meest recente toetsjaren in de voortschrijdende backtest. Leeg = alle jaren met een eerder trainingsjaar.",
+      "geheel", None, "jaar", min=1, max=50, null=True, fase=4),
+    I("model.min_toetsteelten", "Model", "Minimum toetsteelten",
+      "Minder toetsteelten in de backtest = nooit 'gevalideerd'. Technische startwaarde; leeg = geen minimum.", "geheel", 20, min=1, max=100000, null=True, vraag="B32", fase=4),
+    I("model.ridge_alpha", "Model", "Ridge: regularisatie", "Strafterm op de gestandaardiseerde kenmerken. Technische startwaarde.", "getal", 1.0, min=0, max=1000000, fase=4),
+    I("model.bomen_aantal", "Model", "Bomen: aantal stappen", "Aantal stompjes in de boosting. Technische startwaarde.", "geheel", 100, min=1, max=2000, fase=4),
+    I("model.bomen_leersnelheid", "Model", "Bomen: leersnelheid", "Krimpfactor per stap. Technische startwaarde.", "getal", 0.1, min=0.001, max=1, fase=4),
+    I("model.bomen_min_blad", "Model", "Bomen: minimum per blad", "Minimum aantal teelten aan elke kant van een splitsing. Technische startwaarde.", "geheel", 5, min=1, max=1000, fase=4),
+    I("model.hertrainen_uren", "Model", "Automatisch hertrainen", "Interval voor automatisch trainen en toetsen. Leeg = alleen handmatig (Beheer → Model).",
+      "geheel", None, "uur", min=1, max=8760, null=True, fase=4),
+    I("model.max_rekentijd_s", "Model", "Maximale rekentijd training", "Daarna wordt de training afgebroken. Technische startwaarde.", "geheel", 900, "s", min=10, max=86400, fase=4),
     # --- Energie / Afzet / Zoeken ------------------------------------------------------------------------
     I("energie.stroomprijs_eur_per_mwh", "Energie", "Stroomprijs voor de planning", "Het werkboek rekent met 80 en met 300 €/MWh.", "getal", None, "€/MWh", min=0, max=10000, null=True,
       met_ingangsdatum=True, vraag="10", fase=3),
@@ -429,7 +462,12 @@ def valideer(inst: Instelling, waarde: Any) -> Any:
     if t == "lijst":
         if isinstance(waarde, str):
             waarde = [x.strip() for x in waarde.replace(";", ",").split(",")]
-        return [str(x).strip()[:100] for x in waarde if str(x).strip()]
+        lijst = [str(x).strip()[:100] for x in waarde if str(x).strip()]
+        if inst.keuzes:
+            fout = [x for x in lijst if x not in inst.keuzes]
+            if fout:
+                raise OngeldigeWaarde(f"{inst.label}: onbekend {', '.join(fout)}; kies uit {', '.join(inst.keuzes)}.")
+        return lijst
     if t == "toewijzing":
         if isinstance(waarde, str):
             try:

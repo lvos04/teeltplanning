@@ -161,3 +161,59 @@ Voorbeeld: LED fase 2 27,5 kW × 10 uur = 275 kWh; bij 100 + 20 €/MWh = € 33
 Scenariovergelijking: per scenario lichtsom lampen = µmol × uren × 0,0036, MWh per kap = kW × uren / 1000,
 takken/m² = LBE × (zon + lampen) / doelgewicht, takken per kap = × oppervlak, kosten = stroom + overige kosten per
 tak, opbrengst = takken × prijs per tak; meeropbrengst = Δopbrengst − Δkosten.
+
+## Voorstellen met model (`voorstel/model.py`, §6.7 en §8.3)
+
+De voorstelladder levert de **voorstellaag** voor LD-dagen, verlenging, reactietijd en gewicht. Handmatig wint
+altijd; een opgeslagen voorstel (bijvoorbeeld uit een import) gaat voor een modelvoorstel. De kern kent alleen het
+protocol `kern.typen.Voorspeller`; de uitvoering staat in `voorstel/`.
+
+| doel | trede 1 | hogere treden |
+|---|---|---|
+| LD-dagen, verlenging | seizoensbasis | – |
+| reactietijd | seizoensbasis | temperatuurcorrectie |
+| gewicht | seizoensbasis | LBE-identiteit → ridge op het residu → bomen met monotone beperkingen |
+
+```
+seizoensbasis(ras, plantweek, jaar) = mediaan van hetzelfde ras, plantweek ± venster (start 2), ISO-jaren < jaar
+                                      (en ≥ jaar − terugkijkperiode als die is ingesteld)
+band                                = percentielen (start 10 en 90) van diezelfde waarden
+reactietijd_temperatuur             = seizoensbasis + gevoeligheid(ras) × (referentietemperatuur − verwachte temperatuur)
+gewicht_lbe                         = LBE(ras, plantweek) × lichtsom / dichtheid
+gewicht_ridge / gewicht_bomen       = gewicht_lbe + model(kenmerken)            (het model voorspelt het residu)
+```
+
+* **Gerealiseerde reactietijd** in het teeltschema = teeltduur korte dag − 2 − 3 (instellingen *Reactietijd: eerste
+  en tweede aftrek*). Voorbeeld: korte dag 57 dagen → reactietijd 52.
+* **Historie** (`voorstel/historie.py`): afgesloten teelten (oogst vóór vandaag) uit het vastgestelde plan (alleen
+  handmatige/geïmporteerde waarden, nooit eigen voorstellen; gewicht = werkboekkolom X), het teeltschema (ras via de
+  teelt op dezelfde kap en plantdatum ± tolerantie) en, vanaf fase 6, gekoppelde teelten uit Gewichtsverwachting.
+  Gemengde kappen tellen niet mee voor een ras.
+* **LBE-trede**: LBE per (ras, plantweek) = gemiddelde `gewicht × dichtheid / lichtsom` van de trainingsteelten, met
+  dezelfde keuze en terugval als de kern (`kern.gewas.kies_lbe`). Zonder lichtsom (bijv. transmissie onbekend) kan
+  deze trede niet rekenen en valt het voorstel terug op de seizoensbasis.
+* **Ridge**: gestandaardiseerde kenmerken (plantweek als sin/cos, lichtsom, dichtheid, LD-dagen, ras als aandeel),
+  gesloten vorm `(XᵀX + αI)⁻¹Xᵀy`, α = *Ridge: regularisatie* (start 1).
+* **Bomen**: gradient boosting met stompjes (start 100 stappen, leersnelheid 0,1, minimum 5 per blad). Bij een
+  kenmerk met een monotone beperking wordt alleen een splitsing gekozen waarvan de bladen in de goede richting
+  lopen; de som van zulke stompjes is dan ook monotoon (test `test_bomen_zijn_monotoon`). Omdat de LBE-identiteit
+  zelf stijgt met de lichtsom en daalt met de dichtheid, geldt dat ook voor het totaal.
+* **Gemengde kap** (3a3p): per ras een voorstel, gewogen naar bedden.
+* **Afronden**: LD-dagen, verlenging en reactietijd half naar boven op hele dagen.
+
+### Voortschrijdende backtest
+
+Per toetsjaar N+1: trainen op alle teelten t/m jaar N, toetsen op de teelten van jaar N+1 (geen willekeurige
+kruisvalidatie). Per trede de gemiddelde absolute fout (MAE) op **dezelfde** toetsteelten als de seizoensbasis.
+
+* **gevalideerd**: MAE < MAE seizoensbasis × (1 − drempel/100) én minstens *Minimum toetsteelten* (start 20);
+  drempel leeg = elke verbetering telt.
+* **gekozen trede**: van laag naar hoog; een hogere trede vervangt de gekozen trede alleen als hij gevalideerd is
+  én de gekozen trede op de gedeelde toetsteelten verslaat.
+* Een voorstel uit een gevalideerde hogere trede heeft status **gevalideerd**; een voorstel uit de seizoensbasis
+  is **indicatief**. Ontbreekt de invoer voor de gekozen trede (bijv. geen lichtsom), dan de eerstvolgende lagere.
+* Band bij een hogere trede: percentielen van de backtestfouten van die trede rond de puntschatting.
+
+Voorbeeld (synthetisch, `tests/test_model.py`): gewicht = LBE × lichtsom / dichtheid × ruis ±3 %. Seizoensbasis
+MAE 21,1 g, LBE-identiteit 1,6 g over 225 toetsteelten → LBE gevalideerd en gekozen. Met puur ruis als gewicht:
+seizoensbasis 14,7 g, LBE 27,2 g, ridge 20,6 g, bomen 27,1 g → niets gevalideerd, gekozen = seizoensbasis.

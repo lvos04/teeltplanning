@@ -367,3 +367,21 @@ class Energieprijs(Base):
     eur_per_mwh: Mapped[float | None] = mapped_column(Float, nullable=True)
     bron: Mapped[str] = mapped_column(String(30), default="energyzero")
     opgehaald_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+
+
+# --- Fase 4: voorstellen met model -------------------------------------------------------------------------
+class Modelversie(Base):
+    """Eén training + voortschrijdende backtest (§8.3). Het artefact (waarnemingen, instellingen, backtest) is
+    gewone JSON; de nieuwste versie met status `klaar` levert de voorstellen."""
+
+    __tablename__ = "modelversie"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    versie: Mapped[str] = mapped_column(String(40), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="bezig")  # bezig | klaar | mislukt
+    gestart_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    klaar_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    gestart_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+    melding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    aantal_waarnemingen: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    herkomst: Mapped[Any] = mapped_column(JSON, nullable=True)  # aantallen per bron, overgeslagen
+    artefact: Mapped[Any] = mapped_column(JSON, nullable=True)
