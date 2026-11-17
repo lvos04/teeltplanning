@@ -11,5 +11,4 @@ data/
 *.xlsx
 *.xlsm
 *.xls
-!tests/synthetisch/*.xlsx
 /proeven/uitvoer/

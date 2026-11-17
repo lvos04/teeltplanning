@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% block titel %}Energie {{ jaar }}{% endblock %}
+{% block inhoud %}
+<h1>Energie belichting · {{ jaar }}</h1>
+<p><a href="/energie?jaar={{ jaar - 1 }}">← {{ jaar - 1 }}</a> · <a href="/energie?jaar={{ jaar + 1 }}">{{ jaar + 1 }} →</a> · <a href="/energie/vergelijking">Scenariovergelijking (150 tegenover 200 µmol)</a></p>
+{% if onbekend %}<p class="melding waarschuwing">kWh kan niet worden berekend: {{ onbekend }}. Vul de periodes in bij <a href="/beheer/tabel/lampgroepen">Beheer → Lampgroepen</a> (vraag 1).</p>{% endif %}
+{% if prijs_onbekend %}<p class="melding info">Stroomprijs voor de planning onbekend (vraag 10): kosten worden niet berekend.</p>{% endif %}
+<p class="hulp">Belichtingsdata: {{ dagdata }} dag/module-waarden, {{ weekdata }} week/module-waarden. kWh = kW per kap × dimgewogen uren; verleden = geïmporteerde uren, toekomst = historisch gemiddelde per module en kalenderweek.</p>
+<h2>Per week, hele bedrijf</h2>
+<div class="raster-houder"><table class="lijst"><thead><tr><th>week</th><th>kWh</th><th>kosten €</th><th>soort</th></tr></thead><tbody>
+{% for b in bedrijf %}<tr><td>{{ b.week }}</td><td>{{ b.kwh|getal(0, 'onbekend') }}</td><td>{{ b.kosten|getal(0, 'onbekend') }}</td><td>{{ b.soorten|join('/') }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>kWh per kap per week</h2>
+<div class="raster-houder"><table class="raster"><thead><tr><th class="k-B">kap</th>{% for w in weken %}<th>{{ w }}</th>{% endfor %}</tr></thead><tbody>
+{% for kap, rij in per_kap.items() %}<tr><td class="k-B">{{ kap }}</td>{% for w in weken %}<td>{{ rij.get(w)|getal(0, '?') }}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div>
+<h2>Lampgroepen</h2>
+<table class="lijst"><thead><tr><th>groep</th><th>µmol</th><th>kW/kap</th><th>modules</th><th>geldig</th><th>status</th></tr></thead><tbody>
+{% for g in groepen %}<tr><td>{{ g.naam }}</td><td>{{ g.intensiteit_umol|getal(0, 'onbekend') }}</td><td>{{ g.kw_per_kap|getal(1, 'onbekend') }}</td><td>{{ g.module_van or '?' }}–{{ g.module_tot or '?' }}</td><td>{{ g.geldig_vanaf or 'onbekend' }} t/m {{ g.geldig_tot or 'onbekend/open' }}</td><td>{{ g.status }}</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block titel %}Jaaroverzicht {{ jaar }}{% endblock %}
+{% block inhoud %}
+<h1>Jaaroverzicht {{ jaar }} <small>{{ scenario.naam }} ({{ scenario.status }})</small></h1>
+<form method="get" class="inline">
+  <select name="scenario" aria-label="scenario">{% for s in scenarios %}<option value="{{ s.id }}" {% if s.id == scenario.id %}selected{% endif %}>{{ s.naam }}</option>{% endfor %}</select>
+  <input name="jaar" value="{{ jaar }}" size="5" aria-label="jaar"><button>Tonen</button>
+  <a href="/jaar?scenario={{ scenario.id }}&jaar={{ jaar - 1 }}">← {{ jaar - 1 }}</a> <a href="/jaar?scenario={{ scenario.id }}&jaar={{ jaar + 1 }}">{{ jaar + 1 }} →</a>
+</form>
+<p class="hulp">P = planten, LD = lange dag, KD = korte dag, O = oogst. Oogst in {{ o.cijfers.eenheid }}{% if o.cijfers.eenheid == 'teelten' %} (oogstaantallen onbekend){% endif %}. {{ o.cijfers.teelten }} teelt(en) met de oogst in {{ jaar }}, {{ o.cijfers.conflicten }} met een conflict.</p>
+{% for m in o.cijfers.meldingen %}<div class="melding waarschuwing">{{ m }}</div>{% endfor %}
+<div class="raster-houder"><table class="raster jaar">
+<thead><tr><th class="k-B">kap</th>{% for w in o.weken %}<th class="{% if w in o.lage_prijs %}lage-prijs{% endif %}">{{ w }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for r in o.rijen %}<tr><th class="k-B"><a href="/kap/{{ r.kap }}?scenario={{ scenario.id }}">{{ r.kap }}</a></th>{% for c in r.cellen %}<td class="fase-{{ c or 'leeg' }}">{{ c }}</td>{% endfor %}</tr>{% endfor %}
+<tr class="som"><th class="k-B">oogst</th>{% for w in o.weken %}<td>{{ o.cijfers.oogst[w]|getal(0) }}</td>{% endfor %}</tr>
+<tr class="som"><th class="k-B">kWh</th>{% for w in o.weken %}<td>{% if o.cijfers.kwh %}{{ o.cijfers.kwh.get(w)|getal(0, '?') }}{% else %}?{% endif %}</td>{% endfor %}</tr>
+<tr><th class="k-B">afzet</th>{% for w in o.weken %}<td class="tekst">{{ (o.momenten.get(w) or [])|join(', ') }}</td>{% endfor %}</tr>
+<tr><th class="k-B">feestdagen</th>{% for w in o.weken %}<td class="tekst">{% if o.feestdagen.get(w) %}<span title="{{ o.feestdagen[w]|join('; ') }}">{{ o.feestdagen[w]|length }}</span>{% endif %}</td>{% endfor %}</tr>
+<tr><th class="k-B">lage prijs</th>{% for w in o.weken %}<td>{% if w in o.lage_prijs %}●{% endif %}</td>{% endfor %}</tr>
+</tbody></table></div>
+<p class="hulp">kWh: alleen dagen waarop er een teelt in de kap staat; "?" = onbekend (bijv. lampgroepmaanden of branduren onbekend). Lage prijs: <a href="/beheer/instellingen?groep=Afzet">Instellingen → Afzet</a>{% if not o.lage_prijs %} (niet ingesteld){% endif %}.</p>
+{% endblock %}

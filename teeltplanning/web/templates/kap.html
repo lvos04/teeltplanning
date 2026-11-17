@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block titel %}Kap {{ kap.nummer }}{% endblock %}
+{% block inhoud %}
+<div class="balk">
+  <form method="get" action="" class="kiezer" onsubmit="location.href='/kap/'+this.kap.value+'?scenario={{ scenario.id }}';return false;">
+    <label>Kap <select name="kap" onchange="this.form.onsubmit()">{% for k in kappen %}<option value="{{ k }}" {% if k == kap.nummer %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  </form>
+  <h1>Kap {{ kap.nummer }}{% if kap.vakgroep %} <small>vakgroep {{ kap.vakgroep }}</small>{% endif %}</h1>
+  <span>Scenario {{ scenario.naam }}</span>
+</div>
+{% if begin %}<p class="hulp">Van {{ begin|wd('week-dag-jaar') }} tot {{ eind|wd('week-dag-jaar') }}. Groen = lange dag (planten → licht uit), paars = korte dag (licht uit → oogst).</p>{% endif %}
+<table class="ketting">
+  <thead><tr><th>ronde</th><th>soort</th><th>plant</th><th>licht uit</th><th>oogst</th><th>duur</th><th class="tijdbalk-kop">tijdbalk</th><th>meldingen</th></tr></thead>
+  <tbody>
+  {% for b in balken %}{% set u = b.uitkomst %}
+  <tr class="{% if u.heeft_fout %}heeft-fout{% endif %}">
+    <td><a href="/ronde?scenario={{ scenario.id }}&nummer={{ b.ronde.nummer }}">{{ b.ronde.nummer }}</a></td>
+    <td><a href="/teelt/{{ b.teelt.id }}">{{ b.teelt.schemacode or '' }}</a></td>
+    <td class="{% if u.bron.plantdatum == 'handmatig' %}handmatig{% else %}keten{% endif %}">{{ u.effectief.plantdatum|wd('week-dag-jaar') }}</td>
+    <td>{{ u.licht_uit|wd }}</td><td>{{ u.oogst|wd('week-dag-jaar') }}</td><td>{{ u.teeltduur if u.teeltduur is not none else '' }}</td>
+    <td class="tijdbalk">{% if b.ld %}<span class="ld" style="left:{{ b.ld[0] }}%;width:{{ b.ld[1] }}%"></span><span class="kd" style="left:{{ b.kd[0] }}%;width:{{ b.kd[1] }}%"></span>{% endif %}</td>
+    <td class="meldingen">{% for m in u.meldingen if m.niveau != 'info' %}<span class="m-{{ m.niveau }}">{{ m.tekst }}</span>{% endfor %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

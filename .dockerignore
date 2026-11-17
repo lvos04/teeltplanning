@@ -1,0 +1,16 @@
+.git
+.venv
+data
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+*.zip
+*.xlsx
+tests
+docs
+README.md
+.gitignore
+.github
+requirements-dev.txt
+proeven/uitvoer

@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block titel %}Back-up{% endblock %}
+{% block inhoud %}
+<h1>Back-up en export</h1>
+<p>{{ status.aantal }} back-up(s), samen {{ (status.totaal_bytes / 1048576)|round(1) }} MiB. Nieuwste: {{ status.nieuwste|tijd if status.nieuwste else 'nog geen' }}.
+Vrije schijfruimte: {{ (status.schijf.vrij / 1073741824)|round(1) }} GiB van {{ (status.schijf.totaal / 1073741824)|round(1) }} GiB.</p>
+{% for a in status.advies %}<p class="melding waarschuwing">{{ a }}</p>{% endfor %}
+<p class="melding info">{{ status.offsite }}</p>
+{% if status.herstel_klaar %}<p class="melding waarschuwing">Er staat een back-up klaar om terug te zetten. Herstart de app om hem toe te passen.</p>{% endif %}
+<form method="post" action="/beheer/backup/maken"><button>Nu een back-up maken</button></form>
+<h2>Downloaden</h2>
+<p class="hulp">Een back-up bevat alles, ook accounts. Bevestig opnieuw met je wachtwoord{% if gebruiker.mfa_aan %} en een code{% endif %}.</p>
+<form method="post" action="/beheer/backup/download" class="inline">
+<select name="naam">{% for a in status.archieven %}<option>{{ a.naam }}</option>{% endfor %}</select>
+<input type="password" name="wachtwoord" placeholder="wachtwoord" required>{% if gebruiker.mfa_aan %}<input name="code" placeholder="code" required>{% endif %}
+<button>Downloaden</button></form>
+<h2>Back-up terugzetten</h2>
+<p class="hulp">De back-up wordt gecontroleerd (checksums, databasecontrole) en klaargezet; bij de volgende herstart vervangt hij de huidige gegevens. De huidige bestanden blijven bewaard in <code>/data/herstel/</code>.</p>
+<form method="post" action="/beheer/backup/herstel" enctype="multipart/form-data" class="inline">
+<input type="file" name="bestand" accept=".zip" required><input type="password" name="wachtwoord" placeholder="wachtwoord" required>{% if gebruiker.mfa_aan %}<input name="code" placeholder="code" required>{% endif %}
+<button>Controleren en klaarzetten</button></form>
+<h2>Volledige export</h2>
+<p class="hulp">Alle bedrijfstabellen als CSV plus de instellingen als JSON; zonder wachtwoorden, sessies en MFA-geheimen.</p>
+<form method="post" action="/beheer/export" class="inline"><input type="password" name="wachtwoord" placeholder="wachtwoord" required>{% if gebruiker.mfa_aan %}<input name="code" placeholder="code" required>{% endif %}<button>Exporteren</button></form>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% block titel %}Sjabloon{% endblock %}
+{% block inhoud %}
+<h1>Afdruksjabloon</h1>
+<p>Upload je eigen werkboek <em>Teeltprogramma maken</em> één keer als sjabloon. Het wordt bewaard onder
+<code>/data/sjabloon/</code> (nooit in de image). Bij afdrukken schrijft de app <strong>waarden</strong> in een kopie van het
+rondeblad of de teeltkaart; opmaak, kolombreedtes, samengevoegde cellen en afdrukinstellingen blijven zoals in je werkboek.
+Celposities en afdrukbereik staan in <a href="/beheer/instellingen?groep=Afdrukken">Beheer → Instellingen → Afdrukken</a>.</p>
+{% if not soffice %}<p class="melding fout">LibreOffice is niet gevonden: alleen Excel-bestanden zijn mogelijk.</p>{% endif %}
+<form method="post" action="/beheer/sjabloon/upload" enctype="multipart/form-data" class="formulier">
+  <label>Werkboek (.xlsx) <input type="file" name="bestand" accept=".xlsx" required></label>
+  <button>Uploaden en controleren</button>
+</form>
+{% if sjabloon %}
+<h2>Huidig sjabloon</h2>
+<p>{{ sjabloon.bestandsnaam }} · {{ sjabloon.geupload_op|tijd }} · sha256 <code>{{ sjabloon.sha256[:12] }}…</code></p>
+{% for m in controle.meldingen or [] %}<p class="melding waarschuwing">{{ m }}</p>{% endfor %}
+<p>Bladen: {{ (controle.bladen or [])|length }}; afdrukbereiken: {% for b, r in (controle.afdrukbereiken or {}).items() %}{{ b }} {{ r }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+<h3>Lettertypen</h3>
+<table class="lijst"><thead><tr><th>lettertype in het werkboek</th><th>in de container</th></tr></thead><tbody>
+{% for l in lettertypen %}<tr><td>{{ l.naam }}</td><td class="{{ 'fout' if l.status == 'ontbreekt' else '' }}">{{ l.tekst }}</td></tr>{% endfor %}
+</tbody></table>
+<form method="post" action="/beheer/sjabloon/lettertype" enctype="multipart/form-data" class="formulier">
+  <label>Lettertypebestand uploaden (.ttf, .otf, .ttc) <input type="file" name="bestand" accept=".ttf,.otf,.ttc" required></label>
+  <button>Uploaden</button>
+</form>
+{% if bestanden %}<p class="hulp">Geüpload: {{ bestanden|join(', ') }}</p>{% endif %}
+<h3>Formules die de app niet vult</h3>
+<p class="hulp">Deze formulecellen staan niet in de celtoewijzing. In de afdruk worden ze {{ 'leeggemaakt' }} of tonen ze de laatste waarde uit het sjabloon (instelling <em>Formules die de app niet vult</em>).</p>
+{% for blad, cellen in (controle.formules_niet_gevuld or {}).items() %}<p><strong>{{ blad }}</strong>: {% if cellen %}{{ cellen[:100]|join(', ') }}{% if cellen|length > 100 %} … ({{ cellen|length }}){% endif %}{% else %}geen{% endif %}</p>{% endfor %}
+<form method="post" action="/beheer/sjabloon/controle"><button>Controle opnieuw uitvoeren</button></form>
+<h3>Controleafdruk</h3>
+<p>Een teeltkaart met in elke toegewezen cel de naam van het veld: <a href="/beheer/sjabloon/proefkaart.pdf" target="_blank">pdf</a> · <a href="/beheer/sjabloon/proefkaart.xlsx">Excel</a>.</p>
+{% endif %}
+{% if eerdere|length > 1 %}<h3>Eerdere sjablonen</h3><ul>{% for s in eerdere %}<li>{{ s.bestandsnaam }} · {{ s.geupload_op|tijd }}{% if s.actief %} (actief){% endif %}</li>{% endfor %}</ul>{% endif %}
+{% endblock %}

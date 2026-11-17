@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block titel %}Scenario's vergelijken{% endblock %}
+{% block inhoud %}
+<h1>Scenario's vergelijken</h1>
+<form method="get" class="inline">
+  <select name="a" aria-label="scenario A">{% for s in scenarios %}<option value="{{ s.id }}" {% if s.id == a %}selected{% endif %}>{{ s.naam }} ({{ s.status }})</option>{% endfor %}</select>
+  <select name="b" aria-label="scenario B">{% for s in scenarios %}<option value="{{ s.id }}" {% if s.id == b %}selected{% endif %}>{{ s.naam }} ({{ s.status }})</option>{% endfor %}</select>
+  <input name="jaar" value="{{ jaar }}" size="5" aria-label="jaar"><button>Vergelijken</button>
+</form>
+{% if u %}
+<h2>{{ u.a.scenario.naam }} (A) tegenover {{ u.b.scenario.naam }} (B), {{ jaar }}</h2>
+<p>Oogst in {{ u.a.eenheid }}{% if not u.eenheid_gelijk %} / {{ u.b.eenheid }} (let op: verschillende eenheden){% endif %}: A {{ u.totaal.oogst_a|getal(0) }}, B {{ u.totaal.oogst_b|getal(0) }}.
+kWh: A {{ u.totaal.kwh_a|getal(0, 'onbekend') }}, B {{ u.totaal.kwh_b|getal(0, 'onbekend') }}. Conflicten: A {{ u.a.conflicten }}, B {{ u.b.conflicten }}.</p>
+<h3>Afzetdekking</h3>
+<table class="lijst"><thead><tr><th>afzetmoment</th><th>datum</th><th>venster</th><th>belang</th><th>A</th><th>B</th><th>B − A</th></tr></thead><tbody>
+{% for d in u.dekking %}<tr><td>{{ d.naam }}</td><td>{{ d.datum }}</td><td>{% if d.venster %}{{ d.venster[0] }} t/m {{ d.venster[1] }}{% else %}<span class="onbekend">onbekend (vraag 9)</span>{% endif %}</td><td>{{ d.gewicht if d.gewicht is not none else 'onbekend' }}</td>
+<td>{{ d.aanvoer_a|getal(0, '—') }}</td><td>{{ d.aanvoer_b|getal(0, '—') }}</td><td>{{ d.verschil|getal(0, '—') }}</td></tr>{% endfor %}
+</tbody></table>
+<h3>Oogst en kWh per week</h3>
+<div class="scroll"><table class="lijst"><thead><tr><th>week</th><th>oogst A</th><th>oogst B</th><th>verschil</th><th>kWh A</th><th>kWh B</th><th>verschil</th></tr></thead><tbody>
+{% for w in u.weken %}<tr><td>{{ w.week }}</td><td>{{ w.oogst_a|getal(0) }}</td><td>{{ w.oogst_b|getal(0) }}</td><td>{{ w.oogst_verschil|getal(0) }}</td>
+<td>{{ w.kwh_a|getal(0, 'onbekend') }}</td><td>{{ w.kwh_b|getal(0, 'onbekend') }}</td><td>{{ w.kwh_verschil|getal(0, '—') }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endblock %}

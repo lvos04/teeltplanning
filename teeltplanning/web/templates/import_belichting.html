@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% block titel %}Import belichting {{ batch.id }}{% endblock %}
+{% block inhoud %}
+<h1>Belichting winterronde · import {{ batch.id }}</h1>
+<p>{{ batch.bestandsnaam }} · sha256 <code>{{ batch.sha256[:12] }}…</code> · status <strong>{{ batch.status }}</strong></p>
+{% if batch.status == 'lezen' %}
+<div hx-get="/import/belichting/{{ batch.id }}" hx-trigger="every 2s" hx-select="main" hx-target="main" hx-swap="outerHTML">
+<p class="melding">Bezig met lezen… {{ v.voortgang or 0 }} regels van het tabblad data verwerkt. Deze pagina ververst vanzelf.</p>
+<noscript><p><a href="/import/belichting/{{ batch.id }}">Vernieuwen</a></p></noscript>
+</div>
+{% else %}
+{% for m in v.meldingen or [] %}<p class="melding waarschuwing">{{ m }}</p>{% endfor %}
+{% if v.weekuren %}
+<h2>Weekuren (tabblad belichting, rij 2–84)</h2>
+<p>{{ v.weekuren.regels|length }} cellen; weken {{ v.weekuren.weken|first }} t/m {{ v.weekuren.weken|last }}; per celtype: {% for s, n in v.weekuren.soorten.items() %}{{ s }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+{% if v.weekuren.buiten_grenzen %}<p class="melding fout">Buiten 0–168 uur per week (niet opgeslagen): {{ v.weekuren.buiten_grenzen[:50]|join(', ') }}</p>{% endif %}
+{% if v.weekuren.meldingen %}<p class="melding waarschuwing">Meldingen: {% for cel, m in v.weekuren.meldingen[:20] %}{{ cel }}: {{ m }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+{% endif %}
+{% if v.kaptabel is defined %}
+<h2>Kaptabel (vanaf rij 87): {{ v.kaptabel|length }} kappen</h2>
+<table class="lijst"><thead><tr><th>rij</th><th>kap</th><th>plantdatum</th><th>uren LED</th><th>uren SON-T</th><th>µmol</th><th>gewicht progn.</th><th>gewicht real.</th><th>LBE progn.</th><th>LBE real.</th></tr></thead><tbody>
+{% for r in v.kaptabel %}{% set w = r.waarden %}<tr><td>{{ r.rij }}</td><td>{{ r.kap }}</td><td>{{ r.plantdatum or '' }}</td><td>{{ w.uren_led|getal(1) }}</td><td>{{ w.uren_son_t|getal(1) }}</td><td>{{ w.umol if w.umol is not none else '' }}</td><td>{{ w.gewicht_prognose if w.gewicht_prognose is not none else '' }}</td><td>{{ w.gewicht_realisatie if w.gewicht_realisatie is not none else '' }}</td><td>{{ w.lbe_prognose if w.lbe_prognose is not none else '' }}</td><td>{{ w.lbe_realisatie if w.lbe_realisatie is not none else '' }}</td></tr>{% endfor %}
+</tbody></table>
+{% endif %}
+{% if v.kostenvergelijking %}<h2>Kostenvergelijking (AK–AM)</h2><table class="lijst"><tbody>{% for r in v.kostenvergelijking %}<tr><td>{{ r.omschrijving if r.omschrijving is not none else '' }}</td><td>{{ r.a if r.a is not none else '' }}</td><td>{{ r.b if r.b is not none else '' }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+{% if v.teeltschema %}<h2>Teeltschema</h2><p>{{ v.teeltschema.regels|length }} regels.</p>{% endif %}
+<h2>Tabblad data (5-minutendata)</h2>
+{% if v.data %}{% set d = v.data %}
+<table class="lagen">
+<tr><th>regels</th><td>{{ d.regels|getal }} (tijdstempel = {{ d.tijdstempel }} van het interval van {{ d.interval }} minuten)</td></tr>
+<tr><th>modules</th><td>{{ d.modules|length }} ({{ d.modules|first }}–{{ d.modules|last }})</td></tr>
+<tr><th>periode</th><td>{{ d.eerste }} t/m {{ d.laatste }}, {{ d.dagen }} dagen met gegevens</td></tr>
+<tr><th>ontbrekende intervallen</th><td>{{ d.ontbrekend.intervallen|getal }} intervallen in {{ d.ontbrekend.aantal }} periode(n){% for p in d.ontbrekend.perioden[:30] %}<br>{{ p.van }} – {{ p.tot }}{% endfor %}{% if d.ontbrekend.aantal > 30 %}<br>…{% endif %}</td></tr>
+<tr><th>onvolledige dagen</th><td>{{ d.aantal_onvolledige_dagen }}{% for o in d.onvolledige_dagen[:20] %}<br>{{ o.datum }}: {{ o.intervallen }} van {{ o.verwacht }}{% endfor %}</td></tr>
+<tr><th>dubbele tijdstempels</th><td>{{ d.dubbel }}{% for x in d.dubbele_voorbeelden[:10] %}<br>rij {{ x.rij }}: {{ x.tijd }}{% endfor %}</td></tr>
+<tr><th>regels buiten tijdvolgorde</th><td>{{ d.buiten_tijdvolgorde }}</td></tr>
+<tr><th>zomer-/wintertijdovergang</th><td>{{ d.zomer_wintertijd|join(', ') or 'geen' }}</td></tr>
+<tr><th>ongeldige waarden / zonder tijd / naast het raster</th><td>{{ d.ongeldige_waarden }} / {{ d.zonder_tijd }} / {{ d.naast_raster }}</td></tr>
+</table>
+<p class="hulp">Een dag met ontbrekende intervallen telt bij de lichtsom als ontbrekend (instelling <em>Licht → Onvolledige belichtingsdag</em>); er wordt niets stilzwijgend ingevuld.</p>
+{% else %}
+<p>Niet gelezen.</p>
+{% if gebruiker.rol == 'beheerder' and batch.status != 'bevestigd' %}
+<form method="post" action="/import/belichting/{{ batch.id }}/tijdstempel" class="formulier">
+  <label>Is de tijdstempel het begin of het eind van het interval? (vraag B21)
+    <select name="waarde"><option value="begin">begin</option><option value="eind">eind</option></select></label>
+  <button>Instellen en opnieuw lezen</button>
+</form>
+{% endif %}
+{% endif %}
+{% if kan_schrijven and batch.status == 'voorbeeld' %}
+<h2>Jaren en bevestigen</h2>
+<form method="post" action="/import/belichting/{{ batch.id }}/keuzes" class="formulier">
+  <label>ISO-jaar van de eerste weekkolom ({{ v.weekuren.weken|first if v.weekuren else '' }}) van de weekuren (vraag 2)
+    <input name="jaar_weekuren" value="{{ keuzes.jaar_weekuren or '' }}" inputmode="numeric" size="6"></label>
+  <label>ISO-jaar van de eerste regel van het teeltschema
+    <input name="jaar_teeltschema" value="{{ keuzes.jaar_teeltschema or '' }}" inputmode="numeric" size="6"></label>
+  <button>Jaren opslaan</button>
+</form>
+<form method="post" action="/import/belichting/{{ batch.id }}/bevestig"><button>Bevestigen en importeren</button></form>
+<form method="post" action="/import/belichting/{{ batch.id }}/opnieuw"><button>Opnieuw lezen</button></form>
+<p class="hulp">Zonder jaar worden de weekuren of het teeltschema overgeslagen; de rest wordt wel opgeslagen.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

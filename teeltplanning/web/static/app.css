@@ -1,0 +1,47 @@
+:root { --rand: #c9ced6; --kop: #1f4e3d; --handmatig: #fff3c4; --fout: #fde2e1; --keten: #5b6b7a; font-family: system-ui, Arial, sans-serif; font-size: 14px; }
+body { margin: 0; color: #1d2329; background: #fafbfc; }
+.kop { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: .5rem 1rem; background: var(--kop); color: #fff; }
+.kop a { color: #fff; text-decoration: none; } .kop nav a { margin-right: .8rem; } .merk { font-weight: 700; }
+.afmelden { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+main { padding: 1rem; } footer { padding: 1rem; color: #777; font-size: 12px; }
+h1 small, h3 small { font-weight: 400; color: #666; font-size: .8em; }
+.melding { padding: .5rem .8rem; border-radius: 4px; background: #e8f1fb; margin: .5rem 0; }
+.melding.fout, .fout { background: var(--fout); } .melding.waarschuwing { background: #fff1d6; } .ok { color: #1a7f37; }
+.hulp { color: #555; font-size: 13px; }
+.balk { display: flex; flex-wrap: wrap; gap: 1rem; align-items: baseline; }
+.formulier { display: grid; gap: .6rem; max-width: 28rem; } .formulier label { display: grid; gap: .2rem; }
+form.inline { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+input, select, textarea, button { font: inherit; } button { cursor: pointer; }
+.raster-houder { overflow-x: auto; max-height: 78vh; border: 1px solid var(--rand); }
+table.raster { border-collapse: collapse; white-space: nowrap; }
+.raster th, .raster td { border: 1px solid var(--rand); padding: 2px 5px; text-align: right; min-width: 2.2rem; }
+.raster thead th { position: sticky; top: 0; background: #e9eef2; z-index: 2; }
+.raster .k-B, .raster .k-C, .raster .k-D { position: sticky; background: #f3f5f7; z-index: 1; text-align: left; }
+.raster .k-B { left: 0; min-width: 3rem; } .raster .k-C { left: 3.6rem; min-width: 2.4rem; } .raster .k-D { left: 6.6rem; min-width: 3.6rem; }
+.raster thead .k-B, .raster thead .k-C, .raster thead .k-D { z-index: 3; }
+td.bewerkbaar { background: #fff; cursor: cell; } td.bewerkbaar:focus { outline: 2px solid #2a6fdb; outline-offset: -2px; }
+td.handmatig, .handmatig { background: var(--handmatig); font-weight: 600; }
+td.keten, .keten { color: var(--keten); font-style: italic; }
+td.bewerken input { width: 4.5rem; text-align: right; }
+tr.heeft-fout td { box-shadow: inset 0 0 0 9999px rgba(253, 226, 225, .5); }
+td.meldingen { text-align: left; font-size: 12px; max-width: 28rem; white-space: normal; }
+.m-fout { color: #b42318; } .m-waarschuwing { color: #9a6700; } .m-info { color: #555; }
+td.meldingen span { display: block; }
+table.lijst, table.lagen, table.ketting, table.bewijs { border-collapse: collapse; margin: .5rem 0; }
+.lijst th, .lijst td, .lagen th, .lagen td, .ketting th, .ketting td, .bewijs th, .bewijs td { border: 1px solid var(--rand); padding: 3px 6px; text-align: left; vertical-align: top; }
+.tijdbalk { position: relative; width: 40vw; min-width: 16rem; }
+.tijdbalk span { position: absolute; top: 25%; height: 50%; } .tijdbalk .ld { background: #6cbf84; } .tijdbalk .kd { background: #7f63b8; }
+.tegels { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: .8rem; }
+.tegels li { border: 1px solid var(--rand); border-radius: 6px; padding: .7rem; background: #fff; } .tegels span { display: block; color: #666; font-size: 12px; }
+.groepen { display: flex; flex-wrap: wrap; gap: .3rem; margin: .6rem 0; } .groepen a { padding: .2rem .5rem; border: 1px solid var(--rand); border-radius: 4px; text-decoration: none; }
+.groepen a.actief { background: var(--kop); color: #fff; }
+section.instelling { border-top: 1px solid var(--rand); padding: .4rem 0; } section.instelling p { margin: .2rem 0; }
+.onbekend { color: #888; font-style: italic; }
+#raster-melding .melding { position: sticky; left: 0; }
+.knop { display: inline-block; padding: .3rem .8rem; border-radius: 4px; background: var(--kop); color: #fff; text-decoration: none; margin-right: .4rem; }
+table.jaar td { min-width: 1.4rem; padding: 1px 2px; text-align: center; font-size: 11px; }
+table.jaar td.tekst { text-align: left; white-space: normal; max-width: 5rem; font-size: 10px; }
+.fase-P { background: #cfe8d6; } .fase-LD { background: #6cbf84; color: #fff; } .fase-KD { background: #7f63b8; color: #fff; } .fase-O { background: #e3a008; color: #fff; }
+th.lage-prijs { background: #fde2e1 !important; } tr.som td { background: #f3f5f7; }
+.scroll { overflow-x: auto; } tr.gekozen td { background: #eef7f0; } .status-gevalideerd { color: #1a7f37; font-weight: 600; }
+.uitleg { margin-top: .2rem; } ol.voorstellen li { margin: .3rem 0; }
