@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block titel %}Aanmelden{% endblock %}
+{% block inhoud %}
+<h1>Aanmelden</h1>
+{% if fout %}<p class="melding fout">{{ fout }}</p>{% endif %}
+<form method="post" action="/aanmelden" class="formulier">
+  <label>Gebruikersnaam <input name="gebruikersnaam" required maxlength="80" autocomplete="username" autofocus></label>
+  <label>Wachtwoord <input name="wachtwoord" type="password" required maxlength="256" autocomplete="current-password"></label>
+  <button type="submit">Aanmelden</button>
+</form>
+{% endblock %}

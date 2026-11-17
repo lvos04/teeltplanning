@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block titel %}Pdf niet gelukt{% endblock %}
+{% block inhoud %}
+<h1>Pdf niet gelukt</h1>
+<p class="melding fout">{{ melding }}</p>
+<p>Het gevulde Excel-bestand is wel beschikbaar: <a class="knop" href="{{ excel }}">{{ naam }} (Excel)</a></p>
+<p><a href="/afdruk">Terug naar afdrukken</a></p>
+{% endblock %}

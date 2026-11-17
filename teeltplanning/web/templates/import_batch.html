@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% block titel %}Import {{ batch.id }}{% endblock %}
+{% block inhoud %}
+<h1>Import {{ batch.id }}: {{ batch.bestandsnaam }}</h1>
+<p>Status: <strong>{{ batch.status }}</strong> · sha256 <code>{{ batch.sha256[:16] }}…</code> · {{ voorbeeld.regels }} kapregels in {{ voorbeeld.rondes|length }} rondebladen.</p>
+{% for m in voorbeeld.meldingen %}<p class="melding waarschuwing">{{ m.tekst }}</p>{% endfor %}
+{% if voorbeeld.behouden_handmatig %}<p class="melding info">{{ voorbeeld.behouden_handmatig }} handmatige waarde(n) die in de app zijn ingevuld, blijven bij deze import staan.</p>{% endif %}
+{% set vg = voorbeeld.vergelijking %}
+{% if vg and vg.totaal %}
+<h2>Vergelijking met het werkboek</h2>
+<p>Licht uit, bloei en teeltduur, door de app berekend met echte ISO-weken, tegenover de gecachte uitkomsten in het werkboek
+({{ vg.totaal }} regels met een ISO-jaar):
+{% for k, n in vg.tellingen.items() %}<strong>{{ k }}</strong> {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}.
+{% if vg.geslaagd %}<span class="ok">Alle afwijkingen zijn verklaard door de 52-wekenfout van het werkboek.</span>{% else %}<span class="fout">Er zijn onverklaarde afwijkingen of onvolledige regels; zie het rapport.</span>{% endif %}
+<a href="/import/{{ batch.id }}/vergelijking.csv">Rapport als CSV</a></p>
+<details><summary>Afwijkende regels ({{ vg.afwijkend|length }})</summary>
+<table class="lijst"><thead><tr><th>blad</th><th>rij</th><th>kap</th><th>klasse</th><th>licht uit app / werkboek</th><th>bloei app / werkboek</th><th>duur app / werkboek</th></tr></thead><tbody>
+{% for a in vg.afwijkend[:500] %}<tr><td>{{ a.blad }}</td><td>{{ a.rij }}</td><td>{{ a.volgnummer }}</td><td>{{ a.klasse }}</td><td>{{ a.app_licht_uit }} / {{ a.werkboek_licht_uit }}</td><td>{{ a.app_bloei }} / {{ a.werkboek_bloei }}</td><td>{{ a.app_teeltduur }} / {{ a.werkboek_teeltduur }}</td></tr>{% endfor %}
+</tbody></table></details>
+{% endif %}
+<h2>Rondes</h2>
+<form method="post" action="/import/{{ batch.id }}/jaren">
+<table class="lijst"><thead><tr><th>ronde</th><th>titel</th><th>regels</th><th>verwijzingen naar vorige ronde</th><th>ISO-jaar eerste planting</th><th>meldingen</th><th>vergelijking</th></tr></thead><tbody>
+{% for r in voorbeeld.rondes %}
+<tr class="{% if r.titel_conflict %}heeft-fout{% endif %}"><td>{{ r.nummer }}</td><td>{{ r.titel }}{% if r.titel_conflict %} (wijkt af){% endif %}</td><td>{{ r.regels }}</td><td>{{ r.verwijzingen }}</td>
+<td>{% if batch.status == 'voorbeeld' and kan_schrijven %}<input name="jaar_{{ r.nummer }}" value="{{ r.jaar or '' }}" size="5" inputmode="numeric" aria-label="ISO-jaar ronde {{ r.nummer }}">{% else %}{{ r.jaar or '' }}{% endif %}</td>
+<td>{% for k, n in r.meldingen.items() %}<span class="m-info">{{ k }}: {{ n }}</span> {% endfor %}</td>
+<td>{% if r.vergelijking %}{% for k, n in r.vergelijking.items() %}{{ k }} {{ n }} {% endfor %}{% endif %}</td></tr>
+{% endfor %}
+</tbody></table>
+{% if batch.status == 'voorbeeld' and kan_schrijven %}<button type="submit">Jaren opslaan en voorbeeld vernieuwen</button>{% endif %}
+</form>
+{% if batch.status == 'voorbeeld' and kan_schrijven %}
+<form method="post" action="/import/{{ batch.id }}/bevestig"><p>Alleen rondes met een ISO-jaar worden geïmporteerd, als handmatige waarden in het scenario <strong>Werkboek</strong>.
+Een plantweek die naar de vorige ronde verwijst, volgt de keten (instelling <em>Plantdatum bij verwijzing naar vorige ronde</em>).</p>
+<button type="submit">Bevestigen en importeren</button></form>
+{% endif %}
+{% endblock %}

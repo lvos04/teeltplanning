@@ -13,6 +13,10 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 python -m tests.synthetisch proeven/uitvoer      # synthetische testwerkboeken
 ```
 
-Documentatie: [STATUS](docs/STATUS.md) · [OPEN_VRAGEN](docs/OPEN_VRAGEN.md) · [ARCHITECTUUR](docs/ARCHITECTUUR.md) ·
-[TRUENAS](docs/TRUENAS.md) · [EXCEL](docs/EXCEL.md) · [WIJZIGINGEN](docs/WIJZIGINGEN.md) ·
+Lokaal starten: `DATA_DIR=./data .venv/bin/uvicorn teeltplanning.main:app --port 8000` en open
+`http://127.0.0.1:8000`. Browser-rooktest: `python tests/browser_rooktest.py uitvoer/`.
+
+Documentatie: [GEBRUIK](docs/GEBRUIK.md) · [STATUS](docs/STATUS.md) · [OPEN_VRAGEN](docs/OPEN_VRAGEN.md) ·
+[REKENKERN](docs/REKENKERN.md) · [ARCHITECTUUR](docs/ARCHITECTUUR.md) · [TRUENAS](docs/TRUENAS.md) ·
+[HERSTEL](docs/HERSTEL.md) · [EXCEL](docs/EXCEL.md) · [WIJZIGINGEN](docs/WIJZIGINGEN.md) ·
 [koppeling-api](docs/koppeling-api.md)

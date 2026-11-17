@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% block titel %}Afdrukken{% endblock %}
+{% block inhoud %}
+<h1>Afdrukken</h1>
+{% if not sjabloon %}<p class="melding waarschuwing">Er is nog geen sjabloon. {% if gebruiker.rol == 'beheerder' %}Upload je werkboek in <a href="/beheer/sjabloon">Beheer → Sjabloon</a>.{% else %}Vraag de beheerder om het werkboek als sjabloon te uploaden.{% endif %}</p>{% endif %}
+{% if not scenario %}<p>Er is nog geen plan. Importeer eerst een werkboek.</p>{% else %}
+<form method="get" action="/afdruk" class="kiezer balk">
+  <label>Scenario <select name="scenario" onchange="this.form.submit()">{% for s in scenarios %}<option value="{{ s.id }}" {% if s.id == scenario.id %}selected{% endif %}>{{ s.naam }}{% if s.status == 'vastgesteld' %} (vastgesteld){% endif %}</option>{% endfor %}</select></label>
+  <label>Ronde <select name="ronde" onchange="this.form.submit()">{% for r in rondes %}<option value="{{ r }}" {% if r == ronde %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></label>
+  <label>Kap <select name="kap" onchange="this.form.submit()"><option value="">kies…</option>{% for k in kappen %}<option value="{{ k }}" {% if k == kap %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  <noscript><button>Tonen</button></noscript>
+</form>
+{% set q = 'scenario=' ~ scenario.id ~ '&ronde=' ~ ronde %}
+<h2>Rondeblad ronde {{ ronde }}</h2>
+<p class="knoppen">{% if standaard == 'excel' %}<a class="knop" href="/afdruk/rondeblad.xlsx?{{ q }}">Excel</a> <a href="/afdruk/rondeblad.pdf?{{ q }}" target="_blank">Pdf</a>{% else %}<a class="knop" href="/afdruk/rondeblad.pdf?{{ q }}" target="_blank">Pdf</a> <a href="/afdruk/rondeblad.xlsx?{{ q }}">Excel</a>{% endif %}</p>
+<h2>Teeltkaarten ronde {{ ronde }}</h2>
+<p>Alle {{ kappen|length }} kaarten in één bestand (twee kaarten per blad):
+ <a class="knop" href="/afdruk/teeltkaart.pdf?{{ q }}" target="_blank">Pdf</a> <a href="/afdruk/teeltkaart.xlsx?{{ q }}">Excel</a></p>
+{% if kaart %}
+<h3>Kaart kap {{ kap }} (met kap {{ kap + 1 }} ernaast)</h3>
+<p><a class="knop" href="/afdruk/teeltkaart.pdf?{{ q }}&kap={{ kap }}" target="_blank">Pdf</a> <a href="/afdruk/teeltkaart.xlsx?{{ q }}&kap={{ kap }}">Excel</a></p>
+<table class="lijst"><tbody>
+<tr><th>plant</th><td>{{ kaart.plantdatum|wd }}</td><th>sortiment</th><td>{{ kaart.soort or '' }}</td><th>planten/m²</th><td>{{ kaart.dichtheid|getal(1) }}</td></tr>
+<tr><th>licht uit</th><td>{{ kaart.licht_uit|wd }} ({{ kaart.ld_dagen if kaart.ld_dagen is not none else '?' }} LD)</td><th>licht aan</th><td>{{ kaart.licht_aan|wd }}{% if kaart.tussenlicht_dagen is not none %} ({{ kaart.tussenlicht_dagen }} d){% endif %}</td><th>2e licht uit</th><td>{{ kaart.licht_uit_2|wd or 'onbekend' }}</td></tr>
+<tr>{% for naam, d in kaart.behandelingen.items() %}<th>{{ naam }}</th><td>{{ d|wd or 'onbekend' }}</td>{% endfor %}</tr>
+<tr><th>begin oogst</th><td>{{ kaart.oogst|wd }}</td><th>RT</th><td>{{ kaart.reactietijd if kaart.reactietijd is not none else '' }}</td><th>seizoen</th><td>{{ kaart.seizoen or 'onbekend' }}</td></tr>
+</tbody></table>
+<table class="lijst"><thead><tr><th>#</th><th>datum</th><th>LD-dag</th><th>streeflengte</th></tr></thead><tbody>
+{% for m in kaart.momenten %}<tr><td>{{ loop.index }}</td><td>{{ m.datum|wd }}</td><td>{{ m.ld_dag }}</td><td>{{ m.streeflengte if m.streeflengte is not none else '' }}</td></tr>{% endfor %}
+</tbody></table>
+{% for m in kaart.meldingen %}<p class="melding waarschuwing">{{ m.tekst }}</p>{% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}

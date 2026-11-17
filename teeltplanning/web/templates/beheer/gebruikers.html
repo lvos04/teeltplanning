@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block titel %}Gebruikers{% endblock %}
+{% block inhoud %}
+<h1>Gebruikers</h1>
+<table class="lijst"><thead><tr><th>naam</th><th>rol</th><th>actief</th><th>MFA</th><th>wijzigen</th></tr></thead><tbody>
+{% for g in lijst %}<tr><td>{{ g.gebruikersnaam }}</td><td>{{ g.rol }}</td><td>{{ 'ja' if g.actief else 'nee' }}</td><td>{{ 'aan' if g.mfa_aan else 'uit' }}</td>
+<td><form method="post" action="/beheer/gebruikers/{{ g.id }}" class="inline">
+<select name="rol">{% for r in rollen %}<option {% if r == g.rol %}selected{% endif %}>{{ r }}</option>{% endfor %}</select>
+<select name="actief"><option value="ja" {% if g.actief %}selected{% endif %}>actief</option><option value="nee" {% if not g.actief %}selected{% endif %}>uit</option></select>
+<input type="password" name="nieuw_wachtwoord" placeholder="nieuw wachtwoord" minlength="12" autocomplete="new-password">
+{% if g.mfa_aan %}<label><input type="checkbox" name="mfa_reset" value="ja"> MFA resetten</label>{% endif %}
+<button>Opslaan</button></form></td></tr>{% endfor %}
+</tbody></table>
+<h2>Nieuwe gebruiker</h2>
+<form method="post" action="/beheer/gebruikers/nieuw" class="inline">
+<input name="gebruikersnaam" placeholder="gebruikersnaam" required maxlength="80">
+<input type="password" name="wachtwoord" placeholder="wachtwoord (≥ 12 tekens)" required minlength="12" autocomplete="new-password">
+<select name="rol">{% for r in rollen %}<option>{{ r }}</option>{% endfor %}</select><button>Aanmaken</button></form>
+{% endblock %}

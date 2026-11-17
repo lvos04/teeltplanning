@@ -1,0 +1,13 @@
+{% macro rij(r, kolommen) -%}
+<tr id="teelt-{{ r.teelt.id }}" class="{% if r.fout %}heeft-fout{% endif %}">
+  {%- for letter, sleutel, kop in kolommen %}
+  {%- set cel = r.cellen[sleutel] %}
+  <td class="k-{{ letter }}{% if cel.veld %} bewerkbaar{% endif %}{% if cel.handmatig %} handmatig{% endif %}{% if sleutel in ('plant_week','plant_dag') and r.plant_volgt_keten %} keten{% endif %}"
+      {%- if cel.veld %} tabindex="0" data-veld="{{ cel.veld }}" data-url="/teelt/{{ r.teelt.id }}/cel"{% endif %}
+      {%- if cel.voorstel is defined %} title="{% if cel.handmatig %}Handmatig ({{ cel.bron }}); voorstel: {{ cel.voorstel }}{% else %}Voorstel: {{ cel.voorstel }}{% endif %}"{% endif %}>
+    {%- if sleutel == 'volgnummer' %}<a href="/teelt/{{ r.teelt.id }}" tabindex="-1">{{ cel.tekst }}</a>{% else %}{{ cel.tekst }}{% endif -%}
+  </td>
+  {%- endfor %}
+  <td class="meldingen">{% for m in r.meldingen if m.niveau != 'info' %}<span class="m-{{ m.niveau }}">{{ m.tekst }}</span>{% endfor %}</td>
+</tr>
+{%- endmacro %}
