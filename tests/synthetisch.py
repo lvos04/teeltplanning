@@ -183,7 +183,19 @@ def _schrijf_ronde(ws, nummer: int, regels: list[dict], cache: dict[str, object]
         cache[f"AF{r}"] = cumulatief
 
 
-def maak_programma(pad: Path, zaad: int = 20261116) -> dict:
+def _datumcel(jaar: int, week_r12: int, regel: dict) -> datetime | None:
+    """Datum van licht uit + 12 (week-dag zoals het werkboek rekent) in het juiste ISO-jaar."""
+    lu_week, lu_dag = regel["tussenlicht"][1]
+    week, dag = wb_optellen(lu_week, lu_dag, 12)
+    plantweek = regel["plant_week"] or lu_week
+    j = jaar + (1 if plantweek < week_r12 - 20 else 0) + (1 if week < plantweek - 20 else 0)
+    try:
+        return datetime.combine(date.fromisocalendar(j, week, dag), datetime.min.time())
+    except ValueError:
+        return None
+
+
+def maak_programma(pad: Path, zaad: int = 20261116, eerste_iso_jaar: int = EERSTE_ISO_JAAR) -> dict:
     """Schrijf het synthetische programmawerkboek; geeft metadata terug (o.a. ISO-jaar per ronde)."""
     rnd = random.Random(zaad)
     wb = Workbook()
@@ -199,7 +211,7 @@ def maak_programma(pad: Path, zaad: int = 20261116) -> dict:
     vorige: dict[int, dict] = {}
     jaren: dict[int, int] = {}
     alle_regels: dict[int, list[dict]] = {}
-    jaar = EERSTE_ISO_JAAR
+    jaar = eerste_iso_jaar
     vorige_week_r12 = None
     for nummer in range(1, AANTAL_RONDES + 1):
         regels = []
@@ -232,7 +244,8 @@ def maak_programma(pad: Path, zaad: int = 20261116) -> dict:
                 tl = wb_optellen(*licht_uit, 12)
                 tussenlicht = f"{tl[0]}-{tl[1]}"
             elif i % 4 == 1:
-                tussenlicht = datetime(2001, 1, 1) + timedelta(days=rnd.randint(0, 300))  # datumcel
+                rnd.randint(0, 300)  # (trekking behouden: houdt de rest van het werkboek gelijk aan fase 1)
+                tussenlicht = ("datumcel", licht_uit)  # wordt hieronder een datum zodra het jaar bekend is
             verleden = nummer <= 30
             regels.append(
                 {
@@ -263,6 +276,9 @@ def maak_programma(pad: Path, zaad: int = 20261116) -> dict:
             jaar += 1
         vorige_week_r12 = week_r12
         jaren[nummer] = jaar
+        for regel in regels:
+            if isinstance(regel["tussenlicht"], tuple):  # datumcel: licht uit + 12 als echte datum
+                regel["tussenlicht"] = _datumcel(jaar, week_r12, regel)
         titel = f"Ronde {nummer}" if nummer != AANTAL_RONDES else f"Ronde {nummer + 1}"  # bewust afwijkend label
         _schrijf_ronde(bladen[f"Ronde {nummer}"], nummer, regels, caches[f"Ronde {nummer}"], titel)
         alle_regels[nummer] = regels
@@ -291,6 +307,53 @@ STREEFLENGTE_CONTROLE = {
 }  # fmt: skip
 
 
+# Indeling van de synthetische teeltkaart (aanname; het bouwplan noemt alleen N1/N2, rij 11–26 en A–P / R–AG).
+# De celtoewijzing in het instellingenregister (afdrukken.teeltkaart_*) heeft deze indeling als startwaarde.
+KAART_SLAK, KAART_REMSTOF = 7, 14  # synthetische dag-offsets na licht uit (in de app instelbaar, start onbekend)
+
+
+def _k(kolom: str, verschuiving: int) -> str:
+    from openpyxl.utils import column_index_from_string
+
+    return get_column_letter(column_index_from_string(kolom) + verschuiving)
+
+
+def kaartformules(verschuiving: int) -> dict[str, str]:
+    """Formules van één kaart. Alles komt uit het rondeblad via kap (N1) en ronde (N2), zoals in het echte
+    werkboek; week-dag rekent met 52 weken per jaar (zoals het werkboek)."""
+    k = lambda kolom: _k(kolom, verschuiving)  # noqa: E731
+    kap, ronde = f"${k('N')}$1", f"${k('N')}$2"
+
+    def r(kolom: str) -> str:
+        return f'INDEX(INDIRECT("\'Ronde "&{ronde}&"\'!{kolom}12:{kolom}51"),{kap})'
+
+    def plus(week: str, dag: str, dagen: str) -> tuple[str, str]:
+        return (f"MOD({week}-1+INT(({dag}-1+{dagen})/7),52)+1", f"MOD({dag}-1+{dagen},7)+1")
+
+    lu_w, lu_d = f"{k('H')}3", f"{k('I')}3"
+    f = {
+        f"{k('C')}4": "=" + r("E"), f"{k('D')}4": "=" + r("F"), f"{k('C')}5": "=" + r("D"), f"{k('C')}6": "=" + r("M"),
+        f"{k('H')}3": "=" + r("H"), f"{k('I')}3": "=" + r("I"), f"{k('K')}3": "=" + r("G"),
+        f"{k('C')}28": "=" + r("N"), f"{k('D')}28": "=" + r("O"), f"{k('H')}28": "=" + r("J"),
+    }  # fmt: skip
+    for rij, dagen in ((4, "12"), (6, str(KAART_SLAK)), (7, str(KAART_REMSTOF))):
+        w, d = plus(lu_w, lu_d, dagen)
+        f[f"{k('H')}{rij}"], f[f"{k('I')}{rij}"] = "=" + w, "=" + d
+    seizoen = f"IF(${k('C')}$4>=43,1,IF(${k('C')}$4<=6,2,IF(${k('C')}$4<=36,3,4)))"
+    for i, rij in enumerate(range(11, 27)):
+        ld = f"{k('C')}{rij}"
+        if i == 0:
+            f[ld] = f"=CHOOSE({lu_d},0,1,0,1,0,2,1)"
+        else:
+            vorige = f"{k('C')}{rij - 1}"
+            f[ld] = f"={vorige}+CHOOSE(MOD({lu_d}-1+{vorige},7)+1,2,0,2,0,3,0,0)"
+        w, d = plus(lu_w, lu_d, ld)
+        f[f"{k('A')}{rij}"] = f'={w}&"-"&({d})'
+        opzoek = f"INDEX($AJ$2:$AM$41,MATCH({ld},$AI$2:$AI$41,0),{seizoen})"
+        f[f"{k('E')}{rij}"] = f'=IF(ISBLANK({opzoek}),"",{opzoek})'
+    return f
+
+
 def _schrijf_teeltkaart(ws) -> None:
     ws.print_area = "A1:AG31"
     ws.page_setup.orientation = "landscape"
@@ -298,16 +361,35 @@ def _schrijf_teeltkaart(ws) -> None:
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws["A1"] = "Teeltkaart (synthetisch)"
-    ws["A1"].font = Font(name="Arial", size=14, bold=True)
     ws["M1"], ws["N1"] = "kap", 1
     ws["M2"], ws["N2"] = "ronde", 1
-    ws["R1"] = "Teeltkaart (synthetisch)"
-    for kop, kolom in (("datum", "A"), ("LD-dag", "C"), ("streef", "E"), ("soort", "G"), ("cm", "I")):
-        ws[f"{kolom}10"] = kop
-    for r in range(11, 27):
-        for kolom in ("A", "C", "E", "G", "I", "K"):
-            ws[f"{kolom}{r}"].border = RAND
+    ws["AD1"], ws["AE1"] = "kap", "=N1+1"
+    ws["AD2"], ws["AE2"] = "ronde", "=N2"
+    for verschuiving in (0, 17):
+        k = lambda kolom, v=verschuiving: _k(kolom, v)  # noqa: E731
+        ws[f"{k('A')}1"] = "Teeltkaart (synthetisch)"
+        ws[f"{k('A')}1"].font = Font(name="Arial", size=14, bold=True)
+        for cel, tekst in (("A3", "kap"), ("A4", "plant"), ("A5", "sortiment"), ("A6", "pl/m²"), ("F3", "licht uit"),
+                           ("J3", "LD"), ("F4", "licht aan"), ("J4", "tussen"), ("F5", "2e licht uit"), ("F6", "slak"),
+                           ("F7", "remstof"), ("A10", "datum"), ("C10", "LD-dag"), ("E10", "streef"), ("G10", "soort"),
+                           ("I10", "cm"), ("K10", "opmerking"), ("A28", "begin oogst"), ("F28", "RT"),
+                           ("A29", "opmerkingen")):  # fmt: skip
+            ws[k(cel[0]) + cel[1:]] = tekst
+            ws[k(cel[0]) + cel[1:]].font = Font(name="Arial", size=9, bold=True)
+        for rij in range(11, 27):
+            for kolom in ("A", "C", "E", "G", "I", "K"):
+                ws[f"{k(kolom)}{rij}"].border = RAND
+                ws[f"{k(kolom)}{rij}"].font = Font(name="Arial", size=10)
+                ws[f"{k(kolom)}{rij}"].alignment = Alignment(horizontal="center")
+        for cel in ("C4", "D4", "C5", "C6", "H3", "I3", "K3", "H4", "I4", "K4", "H5", "I5", "H6", "I6", "H7", "I7",
+                    "C28", "D28", "H28"):  # fmt: skip
+            ws[k(cel[0]) + cel[1:]].font = Font(name="Arial", size=10)
+            ws[k(cel[0]) + cel[1:]].alignment = Alignment(horizontal="center")
+            ws[k(cel[0]) + cel[1:]].border = RAND
+        for cel, formule in kaartformules(verschuiving).items():
+            ws[cel] = formule
+    for kolom in ("A", "R"):
+        ws.column_dimensions[kolom].width = 9
     ws.merge_cells("A1:F1")
     ws.merge_cells("R1:W1")
     for kolom, tekst in zip(

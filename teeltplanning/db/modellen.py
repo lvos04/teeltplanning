@@ -209,3 +209,20 @@ class Werkboekregel(Base):
     blad: Mapped[str] = mapped_column(String(100))
     rij: Mapped[int] = mapped_column(Integer)
     broncellen: Mapped[Any] = mapped_column(JSON)
+
+
+# --- Fase 2: afdrukken -------------------------------------------------------------------------------------
+class Sjabloon(Base):
+    """Het eigen werkboek van de gebruiker als afdruksjabloon (§9.3, route A). Het bestand staat onder
+    DATA_DIR/sjabloon/ en nooit in de image; de nieuwste actieve regel geldt."""
+
+    __tablename__ = "sjabloon"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bestandsnaam: Mapped[str] = mapped_column(String(300))
+    pad: Mapped[str] = mapped_column(String(500))  # relatief onder DATA_DIR
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    grootte: Mapped[int] = mapped_column(Integer)
+    actief: Mapped[bool] = mapped_column(Boolean, default=True)
+    controle: Mapped[Any] = mapped_column(JSON, nullable=True)  # bladen, lettertypen, formulecellen
+    geupload_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+    geupload_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)

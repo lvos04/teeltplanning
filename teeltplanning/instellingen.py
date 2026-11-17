@@ -12,6 +12,7 @@ waarden als parameter (`teeltplanning.planning`); `kern/` leest zelf nooit uit d
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
@@ -51,6 +52,8 @@ class Instelling:
     kolommen: tuple[Kolom, ...] = ()  # voor type tabel
     vraag: str | None = None  # verwijzing naar docs/OPEN_VRAGEN.md
     fase: int = 1  # vanaf welke fase de app hem gebruikt
+    patroon: str | None = None  # tekst / waarden van een toewijzing moeten hieraan voldoen (regex)
+    sleutels: tuple[str, ...] = ()  # toewijzing: toegestane sleutels (leeg = vrij)
 
     def __post_init__(self):
         assert self.type in TYPEN, self.type
@@ -80,6 +83,23 @@ KOLOMMEN_RONDEBLAD = {
     "gewicht": "T", "geoogst": "V", "gemiddeld_gewicht": "X", "uitval": "Y", "geplant": "Z", "oogstaantal": "AB",
     "maand": "AD", "cumulatief": "AF",
 }  # fmt: skip
+# Velden van de teeltkaart (§9.2) die een cel kunnen krijgen. Datums: als één cel (tekst w-d of datum) of als
+# week + dag in twee cellen.
+_KAART_DATUMS = ("plantdatum", "licht_uit", "licht_aan", "licht_uit_2", "slak", "remstof", "pluizen", "netten", "oogst")
+KAART_VELDEN = (
+    ("kap", "ronde", "soort", "dichtheid", "ld_dagen", "tussenlicht_dagen", "reactietijd", "verlenging", "opmerking")
+    + _KAART_DATUMS
+    + tuple(f"{d}_{deel}" for d in _KAART_DATUMS for deel in ("week", "dag"))
+)
+# Indeling van het synthetische testsjabloon (tests/synthetisch.py). Alleen N1 (kap) en N2 (ronde) en de
+# tabel op rij 11–26 komen uit het bouwplan; de rest is een aanname tot het echte sjabloon is gecontroleerd (B15).
+KAART_CELLEN_START = {
+    "kap": "N1", "ronde": "N2", "plantdatum_week": "C4", "plantdatum_dag": "D4", "soort": "C5", "dichtheid": "C6",
+    "licht_uit_week": "H3", "licht_uit_dag": "I3", "ld_dagen": "K3", "licht_aan_week": "H4", "licht_aan_dag": "I4",
+    "tussenlicht_dagen": "K4", "licht_uit_2_week": "H5", "licht_uit_2_dag": "I5", "slak_week": "H6", "slak_dag": "I6",
+    "remstof_week": "H7", "remstof_dag": "I7", "oogst_week": "C28", "oogst_dag": "D28", "reactietijd": "H28",
+}  # fmt: skip
+KAART_MOMENTEN_START = {"datum": "A", "ld_dag": "C", "streeflengte": "E"}
 KOPPEN_RONDEBLAD = {"D10": "schema", "E10": "pl datum", "H10": "licht uit", "N10": "bloei", "C11": "vak", "E11": "w/d"}
 
 I = Instelling  # noqa: E741 - korte naam voor de lijst hieronder
@@ -166,8 +186,46 @@ REGISTER_LIJST: list[Instelling] = [
     I("teeltkaart.offset_pluizen", "Teeltkaart", "Dag-offset pluizen", "Dagen na licht uit.", "geheel", None, "dagen", min=-60, max=120, null=True, fase=2),
     I("teeltkaart.offset_netten", "Teeltkaart", "Dag-offset netten", "Dagen na licht uit.", "geheel", None, "dagen", min=-60, max=120, null=True, fase=2),
     # --- Afdrukken (fase 2) ------------------------------------------------------------------------------
-    I("afdrukken.standaard", "Afdrukken", "Standaard afdrukvorm", "Pdf of Excel als standaard.", "keuze", None, keuzes=("pdf", "excel"), null=True, fase=2),
-    I("afdrukken.tijdslimiet_s", "Afdrukken", "Tijdslimiet pdf-conversie", "Maximale duur van één LibreOffice-conversie.", "geheel", None, "s", min=5, max=600, null=True, fase=2),
+    I("afdrukken.standaard", "Afdrukken", "Standaard afdrukvorm", "Pdf of Excel als standaard (de knop die bovenaan staat). Leeg = beide gelijk.", "keuze", None, keuzes=("pdf", "excel"), null=True, fase=2),
+    I("afdrukken.tijdslimiet_s", "Afdrukken", "Tijdslimiet pdf-conversie",
+      "Maximale duur van één LibreOffice-conversie; daarna wordt hij afgebroken en blijft het Excel-bestand beschikbaar. "
+      "Technische startwaarde (zoals proef 2).", "geheel", 120, "s", min=5, max=600, fase=2),
+    I("afdrukken.papierformaat", "Afdrukken", "Papierformaat", "Wordt vóór de pdf-conversie expliciet in het werkblad gezet.", "keuze", "A4", keuzes=("A4", "A3"), fase=2),
+    I("afdrukken.passend_op_een_pagina", "Afdrukken", "Passend op één pagina", "Afdruk passend op één pagina breed en hoog, zodat een blad niet wordt gesplitst.", "bool", True, fase=2),
+    I("afdrukken.rondeblad_sjabloonblad", "Afdrukken", "Rondeblad: blad in het sjabloon",
+      "Welk rondeblad uit het sjabloon als opmaak dient. De celtoewijzing is dezelfde als bij het importeren "
+      "(Import → Rondeblad: kolomtoewijzing, eerste en laatste regel, titelcel).", "tekst", "Ronde 1", max=100, fase=2),
+    I("afdrukken.rondeblad_bereik", "Afdrukken", "Rondeblad: afdrukbereik", "Afdrukbereik van het rondeblad (§9.3: B4:R51).", "tekst", "B4:R51", max=20,
+      patroon=r"\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+", fase=2),
+    I("afdrukken.rondeblad_richting", "Afdrukken", "Rondeblad: richting", "§9.3: A4 staand.", "keuze", "staand", keuzes=("staand", "liggend"), fase=2),
+    I("afdrukken.teeltkaart_blad", "Afdrukken", "Teeltkaart: blad in het sjabloon", "Naam van het tabblad met de teeltkaart.", "tekst", "teeltkaart", max=100, fase=2),
+    I("afdrukken.teeltkaart_bereik", "Afdrukken", "Teeltkaart: afdrukbereik", "Afdrukbereik van één blad met kaarten (§9.2: A1:AG31).", "tekst", "A1:AG31", max=20,
+      patroon=r"\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+", fase=2),
+    I("afdrukken.teeltkaart_richting", "Afdrukken", "Teeltkaart: richting", "§9.2: A4 liggend.", "keuze", "liggend", keuzes=("staand", "liggend"), fase=2),
+    I("afdrukken.teeltkaart_kaarten_per_blad", "Afdrukken", "Teeltkaart: kaarten per blad", "§9.2: twee kaarten naast elkaar (kap N en kap N+1).", "geheel", 2, min=1, max=2, fase=2),
+    I("afdrukken.teeltkaart_tweede_kaart_kolommen", "Afdrukken", "Teeltkaart: verschuiving tweede kaart",
+      "Aantal kolommen tussen de eerste en de tweede kaart op een blad (§9.2: A–P en R–AG = 17).", "geheel", 17, "kolommen", min=1, max=200, fase=2),
+    I("afdrukken.teeltkaart_cellen", "Afdrukken", "Teeltkaart: celtoewijzing kop en onderregel",
+      "Cel per veld voor de eerste (linker) kaart. Een datum kan als één cel (bijv. licht_uit → tekst 44-6, of een "
+      "datum als de cel een datumnotatie heeft) of als week en dag in twee cellen (licht_uit_week, licht_uit_dag). "
+      "Alleen kap (N1) en ronde (N2) staan in het bouwplan; de rest is de indeling van het synthetische testsjabloon "
+      "en moet bij het echte sjabloon worden gecontroleerd (Beheer → Sjabloon → controleafdruk met veldnamen).",
+      "toewijzing", KAART_CELLEN_START, fase=2, vraag="B15", patroon=r"[A-Z]{1,3}[1-9]\d{0,5}", sleutels=KAART_VELDEN),
+    I("afdrukken.teeltkaart_momentkolommen", "Afdrukken", "Teeltkaart: kolommen van de meetmomenten",
+      "Kolom per onderdeel van een meetmoment (datum, datum_week, datum_dag, ld_dag, streeflengte) voor de linker kaart.",
+      "toewijzing", KAART_MOMENTEN_START, fase=2, vraag="B15", patroon=r"[A-Z]{1,3}", sleutels=("datum", "datum_week", "datum_dag", "ld_dag", "streeflengte")),
+    I("afdrukken.teeltkaart_eerste_momentrij", "Afdrukken", "Teeltkaart: eerste regel meetmomenten", "§9.2: tabel op rij 11–26.", "geheel", 11, min=1, max=1000, fase=2),
+    I("afdrukken.niet_gevulde_formules", "Afdrukken", "Formules die de app niet vult",
+      "Wat er in de afdruk komt in een formulecel van het sjabloon die niet in de celtoewijzing staat: leegmaken "
+      "(veilig: nooit een waarde van een andere kap) of de laatst door Excel berekende waarde uit het sjabloon.",
+      "keuze", "leegmaken", keuzes=("leegmaken", "sjabloonwaarde"), fase=2),
+    I("afdrukken.max_sjabloon_mb", "Afdrukken", "Maximale grootte sjabloon", "Grootste toegestane sjabloonwerkboek.", "geheel", 32, "MiB", min=1, max=256, fase=2),
+    I("afdrukken.max_lettertype_mb", "Afdrukken", "Maximale grootte lettertypebestand", "Voor uploads naar /data/lettertypen/.", "geheel", 20, "MiB", min=1, max=100, fase=2),
+    I("afdrukken.metrisch_gelijk", "Afdrukken", "Metrisch gelijke lettertypen",
+      "Lettertype uit het sjabloon → lettertype in de image met dezelfde tekenbreedtes (dan verschuift er niets). "
+      "Een lettertype dat hier niet staat en niet is geïnstalleerd of geüpload, wordt in Beheer → Sjabloon gemeld.",
+      "toewijzing", {"Calibri": "Carlito", "Cambria": "Caladea", "Arial": "Liberation Sans", "Times New Roman": "Liberation Serif",
+                     "Courier New": "Liberation Mono", "Helvetica": "Liberation Sans"}, vraag="13", fase=2),
     # --- Import ------------------------------------------------------------------------------------------
     I("import.max_upload_mb", "Import", "Maximale uploadgrootte", "Grootste toegestane werkboek.", "geheel", 32, "MiB", min=1, max=256),
     I("import.max_uitgepakt_mb", "Import", "Maximale uitgepakte grootte", "Grootste toegestane uitgepakte inhoud van een werkboek.", "geheel", 512, "MiB", min=1, max=2048),
@@ -283,6 +341,8 @@ def valideer(inst: Instelling, waarde: Any) -> Any:
             raise OngeldigeWaarde(f"{inst.label}: maximaal {int(inst.max)} tekens.")
         if not tekst and inst.null:
             return None if inst.startwaarde is None else ""
+        if inst.patroon and not re.fullmatch(inst.patroon, tekst):
+            raise OngeldigeWaarde(f"{inst.label}: '{tekst}' heeft niet de juiste vorm.")
         return tekst
     if t == "bool":
         if isinstance(waarde, bool):
@@ -326,7 +386,15 @@ def valideer(inst: Instelling, waarde: Any) -> Any:
             and inst.sleutel.endswith("kolommen")
         ):
             raise OngeldigeWaarde(f"{inst.label}: alle velden moeten een kolom hebben ({', '.join(inst.startwaarde)}).")
-        return {k.strip(): v.strip() for k, v in waarde.items()}
+        uit = {k.strip(): v.strip() for k, v in waarde.items()}
+        if inst.sleutels and set(uit) - set(inst.sleutels):
+            raise OngeldigeWaarde(f"{inst.label}: onbekende velden {', '.join(sorted(set(uit) - set(inst.sleutels)))}; "
+                                  f"kies uit {', '.join(inst.sleutels)}.")  # fmt: skip
+        if inst.patroon:
+            fout = [f"{k}={v}" for k, v in uit.items() if not re.fullmatch(inst.patroon, v)]
+            if fout:
+                raise OngeldigeWaarde(f"{inst.label}: ongeldige verwijzing(en) {', '.join(fout)}.")
+        return uit
     if t == "tabel":
         if isinstance(waarde, str):
             waarde = csv_naar_tabel(inst, waarde)
