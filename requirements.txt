@@ -12,3 +12,5 @@ defusedxml==0.7.1
 qrcode==8.2
 # Versleutelde opslag van bronsleutels (zoals het Bedrijfsdashboard)
 cryptography==50.0.2
+# Officiële feestdagen per land en Pasen (lokaal, geen netwerk; BOUWPLAN §8.1)
+holidays==0.107

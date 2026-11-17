@@ -31,3 +31,6 @@ defusedxml==0.7.1
 cryptography==50.0.2
 cffi==2.1.1
 pycparser==3.12
+holidays==0.107
+python-dateutil==2.9.0.post0
+six==1.17.0

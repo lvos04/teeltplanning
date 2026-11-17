@@ -92,6 +92,7 @@ class KernInstellingen:
     uitval_per_oogstweek: tuple[Uitvalregel, ...] = ()
     grenzen: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     overlap_blokkeert: bool = False
+    oogstdagen: frozenset[int] = frozenset()  # leeg = onbekend: geen controle
 
 
 @dataclass(frozen=True)

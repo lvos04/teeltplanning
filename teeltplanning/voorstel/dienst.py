@@ -96,7 +96,12 @@ def _train(versie_id: int, extra_bron=None) -> None:
     with SessionLocal() as db:
         versie = db.get(Modelversie, versie_id)
         snap = instellingen.laad(db)
-        extra = extra_bron(db) if extra_bron else None
+        if extra_bron is None:
+            from ..bronnen import koppelbronnen
+
+            extra = koppelbronnen.waarnemingen(db)  # gekoppelde teelten uit Gewichtsverwachting (fase 6)
+        else:
+            extra = extra_bron(db)
         waarnemingen, herkomst = historie.verzamel(db, extra=extra)
         inst = model_instellingen(db, snap)
         tijdslimiet = snap["model.max_rekentijd_s"]

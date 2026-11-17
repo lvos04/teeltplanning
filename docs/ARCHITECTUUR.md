@@ -113,3 +113,45 @@ teeltplanning/
 | Live voorstellen | Berekend in `bereken_plan` (geen opgeslagen voorstel), zodat een verschoven plantdatum direct een ander seizoensvoorstel geeft | §4.1: afgeleide waarden worden berekend; een opgeslagen voorstel (import) gaat wel voor |
 | Instellingen en training | Venster, percentielen, treden, kenmerken en hyperparameters gelden **na opnieuw trainen** (staan in het artefact); de schakelaars per veld gelden direct | De backtest hoort bij precies de instellingen waarmee voorspeld wordt |
 | Leren van eigen voorstellen | Alleen handmatige/geïmporteerde waarden en gerealiseerde gewichten tellen als waarneming | Anders versterkt het model zichzelf |
+
+## Fase 5: afzetpieken, genereren en zoeken
+
+```
+teeltplanning/
+  kern/afzet.py         # datumregels, vensters, terugrekenen, aanvoer en dekking (Pasen komt binnen als functie)
+  kern/genereren.py     # ketting vooruit vullen met voorstellen
+  kern/zoeken.py        # lokale gretige zoekactie; geeft een lijst, wijzigt niets
+  kern/plan.py          # + bereken_kap (één kap opnieuw rekenen, voor de zoekfunctie)
+  bronnen/feestdagen.py # Pasen (dateutil), officiële feestdagen (holidays), startinhoud afzetmomenten
+  plannen.py            # scenario's kopiëren/vaststellen/vergelijken, genereren, zoeken (achtergrond), jaaroverzicht
+  web/routes_scenario.py
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Datumregels | Een kleine eigen regeltaal (tekst in de beheertabel), geëvalueerd in de kern; Pasen wordt als functie meegegeven | Leon kan een regel zelf aanpassen zonder nieuwe versie; de paasberekening (computus) zit in `dateutil`, niet als getallen in de kern |
+| Solver | Geen externe solver; gretige lokale zoekactie met een tijdslimiet. **OR-Tools CP-SAT** blijft de kandidaat als er harde eisen bijkomen (bijv. een arbeidsplafond per dag) | §8.2 |
+| Zoeken op de achtergrond | Zoals de training: een apart proces (`spawn`), uitkomst als JSON in `zoekrun` | rekent tot de ingestelde maximale tijd zonder de webapp te vertragen |
+| Toepassen | Per voorstel een handmatige waarde met reden "zoekvoorstel …" en auditregel; geweigerd als het veld intussen handmatig is | §8.2 punt 3 en §4.2: handmatig wint altijd |
+| Genereren | Alleen in een conceptscenario; schrijft **voorstellen** (met bron en modelversie) in `veldwaarde`, nooit handmatige waarden; alleen in een leeg jaar | het vastgestelde plan blijft ongemoeid; genereren is herhaalbaar in een nieuwe kopie |
+| kWh per scenario | Alleen de dagen waarop er een teelt in de kap staat (plantdatum t/m de dag vóór de oogst) | de vergelijking moet laten zien wat een ander plan aan stroom kost |
+
+## Fase 6: koppelingen
+
+```
+teeltplanning/
+  koppeling.py              # Bedrijfskoppeling API v1 aanbieden + sleutelbeheer (JSON)
+  bronnen/koppelbronnen.py  # afnemen: ophalen, koppelen, waarnemingen, prognose
+  bronnen/http.py           # + JSON-foutantwoord in BronFout (voor 403 koppeling_uitgeschakeld)
+  web/routes_koppeling.py   # Beheer → Koppelingen
+```
+
+| Onderwerp | Besluit | Reden |
+|---|---|---|
+| Contract | Overgenomen uit Gewichtsverwachting (`app/koppeling.py`): zelfde sleutelopbouw, hash-lookup + `compare_digest`, snelheidsgrens in het geheugen (één proces) | §11, "volg de bestaande apps" |
+| Parameters | `sinds`, `limiet` en `cursor` worden in de route zelf gelezen, ná de 404-controle | anders geeft FastAPI 422 vóór 404 en komt de fout niet in het contractformaat |
+| Cursor | Opaak: base64 van de sorteersleutel van het laatste item | ook voor datasets zonder numeriek id (week, week-kap) |
+| `bijgewerkt_op` | Afgeleide waarden hebben geen eigen wijzigtijd: per kap de laatste teelt-/veldwijziging, plus de laatste plan-brede wijziging | een wijziging schuift de hele keten; liever iets te veel dan iets missen met `sinds` |
+| Itemcache | Items per dataset bewaard tot het plan of een instelling verandert | een afnemer haalt alle pagina's achter elkaar op; zonder cache rekent elke pagina opnieuw |
+| Afnemen | Eén HTTP-laag (`bronnen/http.py`, standaardbibliotheek) en dezelfde Fernet-kluis als de weerbronnen; volledige verversing per dataset | geen `httpx` in de image nodig; de datasets zijn klein |
+| Koppelen | Alleen eenduidig (precies één kandidaat binnen de tolerantie, één-op-één); de rest in een lijst | §11.2: niet raden |

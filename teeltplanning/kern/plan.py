@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import replace
+from datetime import date
 
 from . import gewas
 from .energie import energie_teelt
@@ -87,25 +88,47 @@ def _licht_en_gewas(u: TeeltUitkomst, teelt: TeeltInvoer, rekenaar: Rekenaar | N
                    dichtheid_onafgerond=dichtheid_ruw, gewicht_band=band, toelichting=toelichting)  # fmt: skip
 
 
-def bereken_plan(invoer: PlanInvoer, parameters: Parameters) -> Plan:
-    per_kap: dict[int, list[TeeltInvoer]] = defaultdict(list)
+def bereken_kap(teelten: list[TeeltInvoer], parameters: Parameters, rekenaar: Rekenaar | None) -> list[TeeltUitkomst]:
+    """Eén kap: keten, daarna licht, gewas en energie. De rekenaar moet al voorbereid zijn (zie bereken_plan)."""
+    kapnummer = teelten[0].kap
+    kap = parameters.kappen.get(kapnummer, KapInvoer(nummer=kapnummer))
+    keten = bereken_keten(teelten, kap, parameters.instellingen, parameters.voorspeller)
+    return _afronden(keten, teelten, parameters, rekenaar)
+
+
+def _afronden(keten, teelten, parameters: Parameters, rekenaar) -> list[TeeltUitkomst]:
+    if rekenaar is None and parameters.gewas is None and parameters.voorspeller is None:
+        return keten
+    per_id = {t.id: t for t in teelten}
+    return [_licht_en_gewas(u, per_id[u.id], rekenaar, parameters.gewas, parameters.voorspeller) for u in keten]
+
+
+def maak_rekenaar(parameters: Parameters, van: date | None, tot: date | None) -> Rekenaar | None:
+    if parameters.licht is None:
+        return None
+    rekenaar = Rekenaar(parameters.licht)
+    if van is not None and tot is not None:
+        rekenaar.bereid_voor(van, tot)
+    return rekenaar
+
+
+def per_kap(invoer: PlanInvoer) -> dict[int, list[TeeltInvoer]]:
+    uit: dict[int, list[TeeltInvoer]] = defaultdict(list)
     for teelt in invoer.teelten:
-        per_kap[teelt.kap].append(teelt)
-    rekenaar = Rekenaar(parameters.licht) if parameters.licht is not None else None
+        uit[teelt.kap].append(teelt)
+    return uit
+
+
+def bereken_plan(invoer: PlanInvoer, parameters: Parameters) -> Plan:
+    groepen = per_kap(invoer)
     ketens = {}
-    for kapnummer, teelten in per_kap.items():
+    for kapnummer, teelten in groepen.items():
         kap = parameters.kappen.get(kapnummer, KapInvoer(nummer=kapnummer))
         ketens[kapnummer] = bereken_keten(teelten, kap, parameters.instellingen, parameters.voorspeller)
-    if rekenaar is not None:
-        datums = [d for keten in ketens.values() for u in keten for d in (u.effectief["plantdatum"], u.oogst) if d]
-        if datums:
-            rekenaar.bereid_voor(min(datums), max(datums))
+    datums = [d for keten in ketens.values() for u in keten for d in (u.effectief["plantdatum"], u.oogst) if d]
+    rekenaar = maak_rekenaar(parameters, min(datums) if datums else None, max(datums) if datums else None)
     uitkomsten = {}
     for kapnummer, keten in ketens.items():
-        per_id = {t.id: t for t in per_kap[kapnummer]}
-        for uitkomst in keten:
-            if rekenaar is not None or parameters.gewas is not None or parameters.voorspeller is not None:
-                uitkomst = _licht_en_gewas(uitkomst, per_id[uitkomst.id], rekenaar, parameters.gewas,
-                                           parameters.voorspeller)  # fmt: skip
+        for uitkomst in _afronden(keten, groepen[kapnummer], parameters, rekenaar):
             uitkomsten[uitkomst.id] = uitkomst
     return Plan(teelten=uitkomsten)

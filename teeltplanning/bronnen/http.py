@@ -15,9 +15,17 @@ from .. import __version__
 
 
 class BronFout(RuntimeError):
-    def __init__(self, melding: str, status: int | None = None):
+    def __init__(self, melding: str, status: int | None = None, data=None):
         super().__init__(melding)
         self.status = status
+        self.data = data  # JSON-antwoord van de bron bij een HTTP-fout (bijv. {"fout": "koppeling_uitgeschakeld"})
+
+
+def _json_of_niets(inhoud: bytes | None):
+    try:
+        return json.loads(inhoud) if inhoud else None
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
 
 
 def _open(verzoek: urllib.request.Request, tijdslimiet: float) -> tuple[int, bytes]:
@@ -34,11 +42,15 @@ def haal(url: str, parameters: dict | None = None, koppen: dict | None = None, t
     try:
         status, inhoud = _open(verzoek, tijdslimiet)
     except urllib.error.HTTPError as fout:
-        raise BronFout(f"De bron antwoordde met HTTP {fout.code}.", fout.code) from fout
+        try:
+            inhoud = fout.read()
+        except OSError:
+            inhoud = None
+        raise BronFout(f"De bron antwoordde met HTTP {fout.code}.", fout.code, _json_of_niets(inhoud)) from fout
     except (urllib.error.URLError, TimeoutError, OSError) as fout:
         raise BronFout(f"Geen verbinding met de bron: {getattr(fout, 'reason', fout)}.") from fout
     if status >= 400:
-        raise BronFout(f"De bron antwoordde met HTTP {status}.", status)
+        raise BronFout(f"De bron antwoordde met HTTP {status}.", status, _json_of_niets(inhoud))
     return inhoud
 
 

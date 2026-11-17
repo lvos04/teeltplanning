@@ -121,6 +121,7 @@ class Scenario(Base):
     status: Mapped[str] = mapped_column(String(20), default="concept")  # concept | vastgesteld
     afgeleid_van: Mapped[int | None] = mapped_column(ForeignKey("scenario.id"), nullable=True)
     aangemaakt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    vastgesteld_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     __table_args__ = (
         # Er is hooguit één vastgesteld plan.
         Index("ix_scenario_een_vastgesteld", "status", unique=True, sqlite_where=text("status = 'vastgesteld'")),
@@ -385,3 +386,81 @@ class Modelversie(Base):
     aantal_waarnemingen: Mapped[int | None] = mapped_column(Integer, nullable=True)
     herkomst: Mapped[Any] = mapped_column(JSON, nullable=True)  # aantallen per bron, overgeslagen
     artefact: Mapped[Any] = mapped_column(JSON, nullable=True)
+
+
+# --- Fase 5: afzetpieken, genereren en zoeken --------------------------------------------------------------
+class Afzetmoment(Base):
+    """Afzetmoment (§8.1) met een datumregel (zie kern/afzet.py). `bevestigd` = door de teler bevestigd."""
+
+    __tablename__ = "afzetmoment"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100), unique=True)
+    datumregel: Mapped[str] = mapped_column(String(200))
+    venster_dagen_voor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gewicht: Mapped[float | None] = mapped_column(Float, nullable=True)  # belang 0–10
+    markt: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    actief: Mapped[bool] = mapped_column(Boolean, default=True)
+    bevestigd: Mapped[bool] = mapped_column(Boolean, default=False)
+    opmerking: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Zoekrun(Base):
+    """Eén zoekactie (§8.2): de voorstellen als lijst. Niets wordt automatisch toegepast."""
+
+    __tablename__ = "zoekrun"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scenario_id: Mapped[int] = mapped_column(ForeignKey("scenario.id"), index=True)
+    jaar: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="bezig")  # bezig | klaar | mislukt
+    gestart_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    klaar_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    gestart_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+    melding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uitkomst: Mapped[Any] = mapped_column(JSON, nullable=True)
+    toegepast: Mapped[Any] = mapped_column(JSON, nullable=True)  # lijst met nummers van toegepaste voorstellen
+
+
+# --- Fase 6: Bedrijfskoppeling API v1 ----------------------------------------------------------------------
+class Koppelsleutel(Base):
+    """Eigen koppelsleutel (aanbieden, §11.1). Alleen de SHA-256-hash en een herkenbaar voorvoegsel."""
+
+    __tablename__ = "koppelsleutel"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100))
+    voorvoegsel: Mapped[str] = mapped_column(String(8))
+    sleutel_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    aangemaakt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    aangemaakt_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+    laatst_gebruikt_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ingetrokken_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ingetrokken_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+
+
+class Koppelbron(Base):
+    """Een andere bedrijfsapp waarvan deze app gegevens afneemt (§11.2). De sleutel staat versleuteld opgeslagen."""
+
+    __tablename__ = "koppelbron"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100), unique=True)
+    app: Mapped[str] = mapped_column(String(50), default="gewichtsverwachting")
+    basis_url: Mapped[str] = mapped_column(String(300))
+    sleutel_versleuteld: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    actief: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # ok | uit_bij_bron | fout
+    melding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    laatst_geprobeerd: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    laatst_gelukt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    aangemaakt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+
+
+class KoppelItem(Base):
+    """Opgehaald item uit een dataset van een koppelbron (zoals ontvangen, als JSON)."""
+
+    __tablename__ = "koppel_item"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bron_id: Mapped[int] = mapped_column(ForeignKey("koppelbron.id"), index=True)
+    dataset: Mapped[str] = mapped_column(String(50))
+    extern_id: Mapped[str] = mapped_column(String(100))
+    data: Mapped[Any] = mapped_column(JSON)
+    opgehaald_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    __table_args__ = (UniqueConstraint("bron_id", "dataset", "extern_id"),)

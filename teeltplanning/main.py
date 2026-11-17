@@ -16,14 +16,25 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, select, text
 
-from . import __version__, instellingen, onderhoud
+from . import __version__, instellingen, koppeling, onderhoud, plannen
 from .auth import NietAangemeld
 from .backups import maak_backup, pas_herstel_toe
 from .bronnen import dienst as bronnen_dienst
+from .bronnen import koppelbronnen
 from .db.basis import SessionLocal, engine
 from .db.modellen import Kap, Lampgroep, Ras
 from .voorstel import dienst as model_dienst
-from .web import routes_afdruk, routes_auth, routes_beheer, routes_import, routes_licht, routes_model, routes_plan
+from .web import (
+    routes_afdruk,
+    routes_auth,
+    routes_beheer,
+    routes_import,
+    routes_koppeling,
+    routes_licht,
+    routes_model,
+    routes_plan,
+    routes_scenario,
+)
 from .web.sjablonen import MAP, templates
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,6 +99,7 @@ def startgegevens() -> None:
         for code, naam in START_RASSEN:
             if code not in bestaand:
                 db.add(Ras(code=code, naam=naam))
+        plannen.startgegevens(db)
         db.commit()
 
 
@@ -106,6 +118,10 @@ async def achtergrond() -> None:
             await asyncio.to_thread(bronnen_dienst.ververs_als_nodig)
         except Exception:
             log.exception("Bijwerken van externe bronnen mislukt")
+        try:
+            await asyncio.to_thread(koppelbronnen.ververs_als_nodig)
+        except Exception:
+            log.exception("Ophalen van koppelbronnen mislukt")
         try:
             await asyncio.to_thread(model_dienst.hertrain_als_nodig)
         except Exception:
@@ -230,5 +246,8 @@ app.include_router(routes_import.router)
 app.include_router(routes_afdruk.router)
 app.include_router(routes_licht.router)
 app.include_router(routes_model.router)
+app.include_router(routes_scenario.router)
+app.include_router(routes_koppeling.router)
+koppeling.installeer(app)
 app.include_router(routes_beheer.router)
 app.mount("/static", StaticFiles(directory=str(MAP / "static")), name="static")

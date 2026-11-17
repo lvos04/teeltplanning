@@ -124,3 +124,25 @@ een rekenregel (keten, uitvaltabel) staat dat er; zonder getraind model staat er
 
 Zolang er met echte gegevens geen trede de seizoensbasis verslaat (of de lichtsom onbekend is), zijn alle
 voorstellen **indicatief**.
+
+## Afzet, scenario's, genereren en zoeken (fase 5)
+
+**Afzet**: de afzetmomenten met hun datums voor drie jaar, het venster (zodra ingevuld), terugrekenen van de
+plantdatum en de officiële feestdagen van de ingestelde landen. Aanpassen in *Beheer → Afzetmomenten* (CSV):
+datumregel, `venster_dagen_voor`, belang (`gewicht` 0–10), markt, actief, bevestigd.
+
+**Scenario's**: kopiëren (concept), vaststellen (beheerder; het vorige vastgestelde plan wordt concept), en
+*Twee scenario's vergelijken*: oogst per week, afzetdekking per moment en kWh per week naast elkaar.
+
+**Genereren** (in een concept): vul een jaar in (dat jaar moet leeg zijn) of een aantal rondes. De app vult per
+kap de ketting vooruit met **voorstellen**; daarna is het jaaroverzicht van dat scenario te zien. Stel eerst de
+rasverdeling en eventueel terugvalwaarden in (Instellingen → Genereren) en train het model (Beheer → Model).
+
+**Zoeken**: kies het jaar en *Zoeken*. Op de achtergrond komt een lijst met voorstellen, bijvoorbeeld "Kap 14,
+ronde 9: plantdatum 1 dag(en) later (19-2 → 19-3): +3.200 takken in het venster van Moederdag (2027-05-09)".
+Niets wordt vanzelf toegepast; *Toepassen* zet die ene waarde vast (handmatig, met reden en auditregel), *Alle
+voorstellen toepassen* doet ze in volgorde. Een veld dat intussen handmatig is ingevuld, wordt nooit overschreven.
+Stel eerst de gewichten in (Instellingen → Zoeken); zonder gewichten zijn er geen voorstellen.
+
+**Jaaroverzicht**: kappen × weken met P/LD/KD/O, en onder de kappen de oogst per week, kWh per week (alleen dagen
+met een teelt in de kap), afzetmomenten, feestdagen en weken met lage prijs.

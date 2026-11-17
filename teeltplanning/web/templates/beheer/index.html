@@ -7,7 +7,9 @@
   <li><a href="/beheer/tabel/rassen">Rassen</a><span>code, naam, doelgewicht</span></li>
   <li><a href="/beheer/tabel/lampgroepen">Lampgroepen</a><span>type, intensiteit, kW per kap, modules, geldig vanaf/tot</span></li>
   <li><a href="/beheer/lbe">LBE en dichtheid</a><span>LBE-tabel, kalibratie, ijkpunten belichtingsblad, dichtheidsreeks</span></li>
+  <li><a href="/beheer/tabel/afzetmomenten">Afzetmomenten</a><span>datumregel, venster, belang, markt, bevestigd (§8.1)</span></li>
   <li><a href="/beheer/model">Model</a><span>voorstelladder, trainen op de achtergrond, backtestuitkomsten</span></li>
+  {% if gebruiker.rol == 'beheerder' %}<li><a href="/beheer/koppelingen">Koppelingen</a><span>Bedrijfskoppeling (schakelaar, koppelsleutels) en koppelbronnen (Gewichtsverwachting); standaard uit</span></li>{% endif %}
   {% if gebruiker.rol == 'beheerder' %}<li><a href="/beheer/bronnen">Bronnen</a><span>weer (Open-Meteo, KNMI), stroomprijzen; standaard uit</span></li>{% endif %}
   {% if gebruiker.rol == 'beheerder' %}
   <li><a href="/beheer/sjabloon">Sjabloon</a><span>werkboek als afdruksjabloon, lettertypen, controleafdruk</span></li>
@@ -17,5 +19,5 @@
   {% endif %}
   <li><a href="/beheer/mfa">Tweestapsverificatie</a><span>authenticator-app koppelen</span></li>
 </ul>
-<p class="hulp">Afzetmomenten en koppelingen volgen in latere fasen. Prijzen staan bij Instellingen → Energie.</p>
+<p class="hulp">Prijzen staan bij Instellingen → Energie.</p>
 {% endblock %}

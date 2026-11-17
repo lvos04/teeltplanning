@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from .. import auth, instellingen, mfa, onderhoud
 from ..backups import VOORVOEGSEL, maak_backup, zet_herstel_klaar
 from ..db.basis import DATA_DIR, Base, get_db
-from ..db.modellen import Audit, Gebruiker, Instelling, Kap, Lampgroep, ParameterLbe, Ras
+from ..db.modellen import Afzetmoment, Audit, Gebruiker, Instelling, Kap, Lampgroep, ParameterLbe, Ras
 from .sjablonen import templates
 
 router = APIRouter(prefix="/beheer")
@@ -160,6 +160,11 @@ TABELLEN = {
         ],
         "naam",
     ),
+    "afzetmomenten": (
+        Afzetmoment,
+        ["naam", "datumregel", "venster_dagen_voor", "gewicht", "markt", "actief", "bevestigd", "opmerking"],
+        "naam",
+    ),
     "lbe": (
         ParameterLbe,
         ["ras", "plantweek", "lichtregime", "lbe_g_per_mol", "aantal_waarnemingen", "status", "bron"],
@@ -169,9 +174,10 @@ TABELLEN = {
 TYPEN = {"nummer": int, "plantvolgorde": int, "wisseltijd_dagen": int, "oppervlak_m2": float, "doelgewicht_g": float,
          "temperatuurgevoeligheid_dagen_per_graad": float, "kap": int, "intensiteit_umol": float,
          "rendement_umol_per_j": float, "kw_per_kap": float, "module_van": int, "module_tot": int, "plantweek": int,
-         "lbe_g_per_mol": float, "aantal_waarnemingen": int}  # fmt: skip
+         "lbe_g_per_mol": float, "aantal_waarnemingen": int, "venster_dagen_voor": int, "gewicht": float}  # fmt: skip
 DATUMKOLOMMEN = {"geldig_vanaf", "geldig_tot"}
-BOOLKOLOMMEN = {"actief", "dimbaar"}
+BOOLKOLOMMEN = {"actief", "dimbaar", "bevestigd"}
+GRENZEN = {"gewicht": (0, 10)}  # belang van een afzetmoment (§8.1)
 KEUZES = {"type": ("led", "son_t"), "status": ("bevestigd", "indicatief", "onvoldoende", "gevalideerd")}
 STANDAARD = {"lichtregime": "", "aantal_waarnemingen": 0}  # lege cel → deze waarde (kolom is niet nullable)
 
@@ -204,7 +210,17 @@ def _cel(kolom: str, tekst: str):
             raise ValueError(f"{kolom}: '{tekst}' is geen getal") from exc
         if waarde < 0:
             raise ValueError(f"{kolom}: mag niet negatief zijn")
+        if kolom in GRENZEN and not GRENZEN[kolom][0] <= waarde <= GRENZEN[kolom][1]:
+            raise ValueError(f"{kolom}: kies {GRENZEN[kolom][0]} t/m {GRENZEN[kolom][1]}")
         return waarde
+    if kolom == "datumregel":
+        from ..bronnen.feestdagen import pasen
+        from ..kern.afzet import controleer
+
+        fout = controleer(tekst, pasen, date.today().year)
+        if fout:
+            raise ValueError(f"datumregel '{tekst}': {fout}")
+        return tekst[:200]
     return tekst[:2000] if kolom == "opmerking" else tekst[:100]
 
 

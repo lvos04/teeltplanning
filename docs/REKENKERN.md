@@ -217,3 +217,44 @@ kruisvalidatie). Per trede de gemiddelde absolute fout (MAE) op **dezelfde** toe
 Voorbeeld (synthetisch, `tests/test_model.py`): gewicht = LBE × lichtsom / dichtheid × ruis ±3 %. Seizoensbasis
 MAE 21,1 g, LBE-identiteit 1,6 g over 225 toetsteelten → LBE gevalideerd en gekozen. Met puur ruis als gewicht:
 seizoensbasis 14,7 g, LBE 27,2 g, ridge 20,6 g, bomen 27,1 g → niets gevalideerd, gekozen = seizoensbasis.
+
+## Afzetmomenten (`kern/afzet.py`, §8.1)
+
+| regel | betekenis | voorbeeld |
+|---|---|---|
+| `vast MM-DD` | elk jaar dezelfde datum | Valentijnsdag `vast 02-14` |
+| `pasen N` | N dagen na Pasen (negatief = ervoor) | Britse moederdag `pasen -21` (2026: 15 maart) |
+| `weekdag MM WD N` | N-de weekdag WD (1 = ma … 7 = zo) van maand MM; N = -1 de laatste | moederdag `weekdag 05 7 2` (2026: 10 mei) |
+| `voor MM-DD WD N` | N-de weekdag WD strikt vóór MM-DD | Totensonntag `voor 12-25 7 5` (2026: 22 november) |
+| `A behalve B dan C` | valt A op B, dan C | Franse moederdag `weekdag 05 7 -1 behalve pasen 49 dan weekdag 06 7 1` (2004: 6 juni) |
+
+Pasen komt uit `dateutil.easter` (gelijk aan het pakket `holidays`, getest). Venster = oogst in
+[datum − venster, datum − 1]. Terugrekenen: `plantdatum = oogst − reactietijd − verlenging − ld_dagen`
+(voorbeeld: oogst 8 mei 2026, RT 52, verl. 1, LD 14 → plantdatum 2 maart 2026).
+
+Aanvoer: oogstaantal (takken) als dat voor alle teelten bekend is, anders telt elke teelt als 1 ("teelten").
+Afzetdekking van een moment = aanvoer met de oogst in het venster.
+
+## Genereren (`kern/genereren.py`, §8.2)
+
+Per actieve kap (plantvolgorde): start = oogst van de laatste teelt + wisseltijd → toegestane plantdag (zoals de
+keten), of voor een kap zonder teelt de startdatum (eventueel *Kappen per plantdag* per toegestane plantdag).
+Per teelt: ras uit de rasverdeling (grootste rest; 5:3:2 over 40 kappen → 20/12/8), LD-dagen, verlenging en
+reactietijd uit de voorstelladder of de terugvalwaarde, begrensd tot de grenzen van de datumketen; valt de oogst
+niet op een toegestane oogstdag, dan de kleinste verlenging binnen de grenzen die dat wel doet. Tot de eerste
+plantdatum in het volgende ISO-jaar.
+
+## Zoeken (`kern/zoeken.py`, §8.2)
+
+```
+afzet       = −Σ belang(m) × aanvoer in het venster van m          (momenten in het jaar met venster en belang)
+gelijkmatig = Σ_week |aanvoer(week) − gemiddelde weekaanvoer|       (alle weken van het ISO-jaar)
+doelgewicht = Σ |gewicht − doelgewicht(ras)|
+energie     = Σ stroomkosten (of kWh)
+score       = Σ gewicht(i) × onderdeel(i) / |onderdeel(i) in het uitgangsplan|
+```
+
+Gretig: per stap alle zetten proberen (plantdag ± stap, LD ± stap, verlenging binnen de grenzen, ras wisselen tussen
+twee kappen die in dezelfde week planten), de beste nemen als hij de score verlaagt en geen nieuw conflict geeft.
+Alleen teelten met de oogst in het jaar en de plantdatum na vandaag; handmatige velden doen niet mee. De bijdrage
+van een kap wordt bewaard tot die kap verandert, zodat latere stappen snel zijn.
