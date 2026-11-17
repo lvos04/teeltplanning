@@ -418,3 +418,49 @@ class Zoekrun(Base):
     melding: Mapped[str | None] = mapped_column(Text, nullable=True)
     uitkomst: Mapped[Any] = mapped_column(JSON, nullable=True)
     toegepast: Mapped[Any] = mapped_column(JSON, nullable=True)  # lijst met nummers van toegepaste voorstellen
+
+
+# --- Fase 6: Bedrijfskoppeling API v1 ----------------------------------------------------------------------
+class Koppelsleutel(Base):
+    """Eigen koppelsleutel (aanbieden, §11.1). Alleen de SHA-256-hash en een herkenbaar voorvoegsel."""
+
+    __tablename__ = "koppelsleutel"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100))
+    voorvoegsel: Mapped[str] = mapped_column(String(8))
+    sleutel_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    aangemaakt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    aangemaakt_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+    laatst_gebruikt_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ingetrokken_op: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ingetrokken_door: Mapped[int | None] = mapped_column(ForeignKey("gebruiker.id"), nullable=True)
+
+
+class Koppelbron(Base):
+    """Een andere bedrijfsapp waarvan deze app gegevens afneemt (§11.2). De sleutel staat versleuteld opgeslagen."""
+
+    __tablename__ = "koppelbron"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    naam: Mapped[str] = mapped_column(String(100), unique=True)
+    app: Mapped[str] = mapped_column(String(50), default="gewichtsverwachting")
+    basis_url: Mapped[str] = mapped_column(String(300))
+    sleutel_versleuteld: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    actief: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str | None] = mapped_column(String(30), nullable=True)  # ok | uit_bij_bron | fout
+    melding: Mapped[str | None] = mapped_column(Text, nullable=True)
+    laatst_geprobeerd: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    laatst_gelukt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    aangemaakt_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+
+
+class KoppelItem(Base):
+    """Opgehaald item uit een dataset van een koppelbron (zoals ontvangen, als JSON)."""
+
+    __tablename__ = "koppel_item"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bron_id: Mapped[int] = mapped_column(ForeignKey("koppelbron.id"), index=True)
+    dataset: Mapped[str] = mapped_column(String(50))
+    extern_id: Mapped[str] = mapped_column(String(100))
+    data: Mapped[Any] = mapped_column(JSON)
+    opgehaald_op: Mapped[datetime] = mapped_column(DateTime, default=utcnu)
+    __table_args__ = (UniqueConstraint("bron_id", "dataset", "extern_id"),)

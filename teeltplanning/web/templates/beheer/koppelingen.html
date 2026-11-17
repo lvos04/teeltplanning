@@ -1,0 +1,62 @@
+{% extends "base.html" %}{% block titel %}Koppelingen{% endblock %}
+{% block inhoud %}
+<h1>Koppelingen</h1>
+<p class="hulp">Bedrijfskoppeling API v1 (docs/koppeling-api.md). Na een schone installatie staat alles <strong>uit</strong>.</p>
+
+<h2 id="bedrijfskoppeling">Bedrijfskoppeling</h2>
+<p>Andere bedrijfsapps (zoals het Bedrijfsdashboard en Gewichtsverwachting) halen hier het <strong>vastgestelde plan</strong> op (nooit een concept), alleen-lezen, met een koppelsleutel. Gedeelde datasets: {{ gedeeld|join(', ') or 'geen' }} (Instellingen → Koppeling). Limiet: {{ per_minuut }} verzoeken per minuut per sleutel.</p>
+<form method="post" action="/beheer/koppelingen/schakelaar" class="inline">
+  <input type="hidden" name="welke" value="aanbieden">
+  <strong>Bedrijfskoppeling ingeschakeld:</strong> {{ 'aan' if ingeschakeld else 'uit' }}
+  <button name="aan" value="{{ '0' if ingeschakeld else '1' }}">{{ 'Uitzetten' if ingeschakeld else 'Aanzetten' }}</button>
+  {% if not ingeschakeld %}<span class="hulp">Uit: elke koppelroute geeft <code>403 {"fout": "koppeling_uitgeschakeld"}</code>; andere apps tonen dan "staat uit bij de bron" met deze plek: Beheer → Koppelingen → Bedrijfskoppeling.</span>{% endif %}
+</form>
+
+{% if nieuwe_sleutel %}
+<div class="melding waarschuwing"><strong>Nieuwe koppelsleutel voor {{ nieuwe_sleutel.naam }}</strong> — kopieer hem nu; hij wordt <strong>niet opnieuw getoond</strong> (alleen de SHA-256-hash wordt bewaard):<br>
+<code class="sleutel">{{ nieuwe_sleutel.sleutel }}</code></div>
+{% endif %}
+<h3>Koppelsleutels</h3>
+<table class="lijst"><thead><tr><th>naam</th><th>voorvoegsel</th><th>aangemaakt</th><th>door</th><th>laatst gebruikt</th><th>status</th><th></th></tr></thead><tbody>
+{% for s in sleutels %}<tr><td>{{ s.naam }}</td><td><code>{{ s.voorvoegsel }}…</code></td><td>{{ s.aangemaakt_op }}</td><td>{{ s.aangemaakt_door or '' }}</td><td>{{ s.laatst_gebruikt_op or 'nooit' }}</td>
+<td>{{ 'actief' if s.actief else 'ingetrokken ' ~ s.ingetrokken_op }}</td>
+<td>{% if s.actief %}<form method="post" action="/beheer/koppelingen/sleutels/{{ s.id }}/intrekken"><button>Intrekken</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="7">Nog geen sleutels.</td></tr>{% endfor %}
+</tbody></table>
+<form method="post" action="/beheer/koppelingen/sleutels" class="inline"><input name="naam" placeholder="naam, bijv. Bedrijfsdashboard" required maxlength="100"><button>Sleutel aanmaken</button></form>
+
+<h2 id="bronnen">Koppelbronnen (afnemen)</h2>
+<p>Teeltplanning haalt bij Gewichtsverwachting <code>teelten</code>, <code>oogsten</code>, <code>metingen</code> en <code>prognoses</code> op. Gekoppelde teelten (kap + plantdatum ± {{ koppelingen.tolerantie if koppelingen.tolerantie is not none else '?' }} dag(en), instelling <em>Import → Tolerantie koppelen op plantdatum</em>) voeden de LBE-kalibratie en het model; de prognose staat op de teeltpagina. Er wordt niet geraden: wat niet eenduidig te koppelen is, staat hieronder in een lijst.</p>
+<form method="post" action="/beheer/koppelingen/schakelaar" class="inline">
+  <input type="hidden" name="welke" value="afnemen">
+  <strong>Koppelbronnen ophalen:</strong> {{ 'aan' if bronnen_aan else 'uit' }}
+  <button name="aan" value="{{ '0' if bronnen_aan else '1' }}">{{ 'Uitzetten' if bronnen_aan else 'Aanzetten' }}</button>
+  <span class="hulp">Interval: Instellingen → Koppeling.</span>
+</form>
+<table class="lijst"><thead><tr><th>bron</th><th>adres</th><th>actief</th><th>status</th><th>laatst gelukt</th><th>gegevens</th><th></th></tr></thead><tbody>
+{% for b in bronnen %}<tr><td>{{ b.naam }} <small>({{ b.app }})</small></td><td>{{ b.basis_url }}</td><td>{{ 'ja' if b.actief else 'nee' }}</td>
+<td class="{% if b.status == 'fout' %}m-fout{% elif b.status == 'uit_bij_bron' %}m-waarschuwing{% endif %}">{% if b.status == 'uit_bij_bron' %}<strong>staat uit bij de bron</strong><br><small>{{ b.melding }}</small>{% elif b.status %}{{ b.status }}{% if b.melding %}<br><small>{{ b.melding }}</small>{% endif %}{% else %}nog niet opgehaald{% endif %}</td>
+<td>{{ b.laatst_gelukt|tijd or 'nooit' }}</td>
+<td>{% for d in datasets %}{{ d }}: {{ aantallen.get((b.id, d), 0) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+<td><form method="post" action="/beheer/koppelingen/bronnen/{{ b.id }}/ophalen"><button {% if not bronnen_aan %}disabled title="Koppelbronnen ophalen staat uit"{% endif %}>Nu ophalen</button></form>
+<form method="post" action="/beheer/koppelingen/bronnen/{{ b.id }}" class="inline"><input type="password" name="sleutel" autocomplete="off" placeholder="nieuwe sleutel" size="12"><input name="url" placeholder="nieuw adres" size="14">
+<button name="actief" value="{{ '0' if b.actief else '1' }}">{{ 'Uitzetten' if b.actief else 'Aanzetten' }}</button><button name="actief" value="">Opslaan</button></form></td></tr>
+{% else %}<tr><td colspan="7">Nog geen koppelbronnen.</td></tr>{% endfor %}
+</tbody></table>
+<h3>Koppelbron toevoegen</h3>
+<form method="post" action="/beheer/koppelingen/bronnen" class="formulier">
+  <label>Naam <input name="naam" required maxlength="100" value="Gewichtsverwachting"></label>
+  <label>App <select name="app">{% for slug, (naam, plek) in apps.items() %}<option value="{{ slug }}" {% if slug == 'gewichtsverwachting' %}selected{% endif %}>{{ naam }}</option>{% endfor %}</select></label>
+  <label>Adres <input name="url" required placeholder="https://chrysant.example" maxlength="300"></label>
+  <label>Koppelsleutel (aangemaakt in de bron) <input type="password" name="sleutel" required autocomplete="off" maxlength="300"></label>
+  <button>Toevoegen</button>
+</form>
+{% if bronnen %}
+<h3>Koppeling met het plan</h3>
+<p>{{ koppelingen.gekoppeld|length }} teelt(en) gekoppeld, {{ koppelingen.niet_gekoppeld|length }} niet gekoppeld.</p>
+{% if koppelingen.niet_gekoppeld %}
+<table class="lijst"><thead><tr><th>teelt bij de bron</th><th>kap</th><th>soort</th><th>plantdatum</th><th>reden</th></tr></thead><tbody>
+{% for n in koppelingen.niet_gekoppeld %}<tr><td>{{ n.teelt.id }}</td><td>{{ n.teelt.kap }}</td><td>{{ n.teelt.soort or '' }}</td><td>{{ n.teelt.plantdatum or '' }}</td><td>{{ n.reden }}</td></tr>{% endfor %}
+</tbody></table>{% endif %}
+{% endif %}
+{% endblock %}

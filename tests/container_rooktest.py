@@ -109,6 +109,24 @@ def main(basis: str, map_: Path) -> int:
     assert "belichtingsdagen" in uitkomst["belichting"], uitkomst
     for pad in ("/energie?jaar=2024", "/beheer/lbe", "/beheer/bronnen", "/energie/vergelijking"):
         assert s.verzoek(pad)[0] == 200, pad
+    # Fase 4: trainen en toetsen in een apart proces (spawn) in de container, zonder dat de webapp wacht
+    start = time.time()
+    status, koppen, _ = s.formulier("/beheer/model/trainen", {})
+    assert status == 303 and time.time() - start < 5, (status, time.time() - start)
+    versie = re.search(r"versie=(\d+)", koppen["location"]).group(1)
+    for _ in range(300):
+        assert s.verzoek("/health")[0] == 200
+        model = json.loads(s.verzoek(f"/beheer/model/{versie}/status")[2])
+        if model["status"] != "bezig":
+            break
+        time.sleep(1)
+    assert model["status"] == "klaar", model
+    uitkomst["model"] = {"melding": model["melding"], "seconden": round(time.time() - start, 1)}
+    # Fase 5 en 6: schermen, en de koppeling staat na een schone installatie uit
+    for pad in ("/beheer/model", "/jaar", "/scenarios", "/afzet", "/scenarios/vergelijk", "/beheer/koppelingen"):
+        assert s.verzoek(pad)[0] == 200, pad
+    status, _, inhoud = s.verzoek("/api/koppeling/v1/info")
+    assert status == 403 and json.loads(inhoud) == {"fout": "koppeling_uitgeschakeld"}, (status, inhoud)
     print(json.dumps(uitkomst, indent=1, ensure_ascii=False))
     print("rooktest geslaagd")
     return 0

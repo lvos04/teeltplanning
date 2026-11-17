@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from . import instellingen
 from .auth import audit
 from .db.modellen import (
+    Afzetmoment,
     BelichtingDag,
     BelichtingWeek,
     Gebruiker,
@@ -90,6 +91,7 @@ _RELEVANT = (
     ParameterLbe,
     Ras,
     Modelversie,
+    Afzetmoment,
 )
 
 

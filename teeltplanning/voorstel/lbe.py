@@ -37,15 +37,26 @@ def gerealiseerde_lbe(db: Session, scenario_id: int) -> list[dict]:
 
 
 def kalibreer(db: Session, gebruiker, scenario_id: int) -> dict:
+    """LBE per (ras, plantweek) uit de historie: afgesloten teelten uit het plan, het teeltschema (via kap +
+    plantdatum) en, vanaf fase 6, de gekoppelde teelten uit Gewichtsverwachting (`voorstel/historie.py`)."""
+    from ..bronnen import koppelbronnen
+    from . import historie
+
     snap = instellingen.laad(db)
     minimum = snap["gewas.min_waarnemingen_lbe"]
+    gekoppeld = koppelbronnen.waarnemingen(db)
+    waarnemingen, _ = historie.verzamel(db, extra=gekoppeld)
     per_cel: dict[tuple[str, int, str], list[float]] = {}
-    gemengd = 0
-    for regel in gerealiseerde_lbe(db, scenario_id):
-        if regel["ras"] is None:
+    gemengd = uit_koppeling = 0
+    for w in waarnemingen:
+        lbe = gewas.lbe_gerealiseerd(w.gewicht, w.dichtheid, w.lichtsom)
+        if lbe is None:
+            continue
+        if w.ras is None:
             gemengd += 1
             continue
-        per_cel.setdefault((regel["ras"], regel["plantweek"], ""), []).append(regel["lbe"])
+        uit_koppeling += w.sleutel.startswith("koppeling:")
+        per_cel.setdefault((w.ras, w.week, ""), []).append(lbe)
     bestaand = {(p.ras, p.plantweek, p.lichtregime or ""): p for p in db.scalars(select(ParameterLbe))}
     gewijzigd = overgeslagen = 0
     for (ras, week, regime), waarden in per_cel.items():
@@ -62,7 +73,7 @@ def kalibreer(db: Session, gebruiker, scenario_id: int) -> dict:
         rij.bron = "kalibratie"
         gewijzigd += 1
     uitkomst = {"cellen": gewijzigd, "teelten": sum(len(w) for w in per_cel.values()), "gemengd_overgeslagen": gemengd,
-                "handmatig_behouden": overgeslagen}  # fmt: skip
+                "handmatig_behouden": overgeslagen, "uit_koppeling": uit_koppeling}  # fmt: skip
     audit(db, gebruiker, "lbe_gekalibreerd", "parameter_lbe", uitkomst)
     return uitkomst
 
